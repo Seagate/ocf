@@ -6,9 +6,10 @@
 #ifndef __METADATA_EVICTION_H__
 #define __METADATA_EVICTION_H__
 
-// struct ocf_lru_meta *
-// ocf_metadata_get_lru(
-// 		struct ocf_cache *cache, ocf_cache_line_t line);
+struct ocf_lru_meta *
+ocf_metadata_get_lru(
+		struct ocf_cache *cache, ocf_cache_line_t line);
+		
 struct ocf_lru_meta *
 ocf_metadata_get_lfu(
 		struct ocf_cache *cache, ocf_cache_line_t line);

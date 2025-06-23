@@ -10,14 +10,6 @@ static const uint32_t END_MARKER = (uint32_t)-1;
 // Create an array of doubly linked lists for each frequency
 struct ocf_lfu_list freq_buckets[MAX_FREQ];
 
-// Helper: get LFU meta for cline
-static inline struct ocf_lfu_meta *ocf_metadata_get_lfu(ocf_cache_t cache, ocf_cache_line_t cline)
-{
-    // You must define a way to access LFU metadata, similar to LRU:
-    // For example: return &cache->metadata.lfu[cline];
-    // Here we assume a stub:
-    return ocf_metadata_get_lfu_meta(cache, cline);
-}
 
 // Initialize cacheline LFU metadata
 void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)

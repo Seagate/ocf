@@ -77,7 +77,7 @@ struct ocf_lfu_iter {
 	struct ocf_part *part;
 	struct ocf_request *req;
 	uint32_t current_freq;
-}
+};
 
 #define OCF_EVICTION_CLEAN_SIZE 32U
 
