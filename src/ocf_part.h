@@ -73,10 +73,26 @@ struct ocf_lru_iter
 
 /* LFU Iterator State */
 struct ocf_lfu_iter {
+	/* Cache object */
 	ocf_cache_t cache;
+
+	/* Cacheline concurrency control (locking) */
+	struct ocf_alock *c;
+
+	/* Target (source) partition we're evicting from */
 	struct ocf_part *part;
+
+	/* Optional request context */
 	struct ocf_request *req;
+
+	/* Start index for frequency buckets */
 	uint32_t current_freq;
+
+	/* If true, iterate only clean cachelines */
+	bool clean : 1;
+
+	/* Callback to check if hash bucket is already locked */
+	_lru_hash_locked_pfn hash_locked;
 };
 
 #define OCF_EVICTION_CLEAN_SIZE 32U
