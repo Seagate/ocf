@@ -94,7 +94,8 @@ static ocf_cache_line_t ocf_metadata_get_entries(
 	switch (type) {
 	case metadata_segment_collision:
 	case metadata_segment_cleaning:
-	case metadata_segment_lru:
+	// case metadata_segment_lru:
+	case metadata_segment_lfu:
 	case metadata_segment_list_info:
 		return cache_lines;
 
@@ -147,8 +148,12 @@ static int64_t ocf_metadata_get_element_size(
 	ENV_BUG_ON(type >= metadata_segment_variable_size_start && !line_size);
 
 	switch (type) {
-	case metadata_segment_lru:
-		size = sizeof(struct ocf_lru_meta);
+	// case metadata_segment_lru:
+	// 	size = sizeof(struct ocf_lru_meta);
+	// 	break;
+
+	case metadata_segment_lfu:
+		size = sizeof(struct ocf_lfu_meta);
 		break;
 
 	case metadata_segment_cleaning:
@@ -228,7 +233,8 @@ static bool ocf_metadata_is_flapped(
 	case metadata_segment_part_runtime:
 	case metadata_segment_core_runtime:
 	case metadata_segment_cleaning:
-	case metadata_segment_lru:
+	// case metadata_segment_lru:
+	case metadata_segment_lfu:
 	case metadata_segment_collision:
 	case metadata_segment_list_info:
 	case metadata_segment_hash:
@@ -382,7 +388,8 @@ const char * const ocf_metadata_segment_names[] = {
 		[metadata_segment_part_config]		= "Part config",
 		[metadata_segment_part_runtime]		= "Part runtime",
 		[metadata_segment_cleaning]		= "Cleaning",
-		[metadata_segment_lru]			= "LRU list",
+		// [metadata_segment_lru]			= "LRU list",
+		[metadata_segment_lfu]		= "LFU list",
 		[metadata_segment_collision]		= "Collision",
 		[metadata_segment_list_info]		= "List info",
 		[metadata_segment_hash]			= "Hash",
@@ -1087,7 +1094,8 @@ struct ocf_pipeline_arg ocf_metadata_flush_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_sb_runtime),
 	OCF_PL_ARG_INT(metadata_segment_part_runtime),
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
-	OCF_PL_ARG_INT(metadata_segment_lru),
+	// OCF_PL_ARG_INT(metadata_segment_lru),
+	OCF_PL_ARG_INT(metadata_segment_lfu),
 	OCF_PL_ARG_INT(metadata_segment_collision),
 	OCF_PL_ARG_INT(metadata_segment_list_info),
 	OCF_PL_ARG_INT(metadata_segment_hash),
@@ -1253,7 +1261,8 @@ out:
 
 struct ocf_pipeline_arg ocf_metadata_load_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
-	OCF_PL_ARG_INT(metadata_segment_lru),
+	// OCF_PL_ARG_INT(metadata_segment_lru),
+	OCF_PL_ARG_INT(metadata_segment_lfu),
 	OCF_PL_ARG_INT(metadata_segment_collision),
 	OCF_PL_ARG_INT(metadata_segment_list_info),
 	OCF_PL_ARG_INT(metadata_segment_hash),

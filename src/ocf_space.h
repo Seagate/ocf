@@ -12,6 +12,8 @@
 #include "ocf_lru.h"
 #include "ocf_lru_structs.h"
 
+#include "ocf_lfu.h"
+
 #define OCF_NUM_LRU_LISTS 32
 #define OCF_LRU_CHUNK_SIZE 256
 #define OCF_LRU_STRIPE_SIZE (OCF_NUM_LRU_LISTS * OCF_LRU_CHUNK_SIZE)

@@ -36,6 +36,7 @@ struct ocf_part_runtime {
 	env_atomic curr_size;
 	env_atomic evict_counter;
 	struct ocf_lru_part_meta lru[OCF_NUM_LRU_LISTS];
+	struct ocf_lfu_list freq_buckets[MAX_FREQ];
 };
 
 typedef bool ( *_lru_hash_locked_pfn)(struct ocf_request *req,
@@ -69,6 +70,14 @@ struct ocf_lru_iter
 	/* 1 if iterating over clean lists, 0 if over dirty */
 	bool clean : 1;
 };
+
+/* LFU Iterator State */
+struct ocf_lfu_iter {
+	ocf_cache_t cache;
+	struct ocf_part *part;
+	struct ocf_request *req;
+	uint32_t current_freq;
+}
 
 #define OCF_EVICTION_CLEAN_SIZE 32U
 
