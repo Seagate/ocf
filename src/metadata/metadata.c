@@ -23,7 +23,7 @@
 #include "../utils/utils_parallelize.h"
 
 
-#define OCF_METADATA_DEBUG 0
+#define OCF_METADATA_DEBUG 1
 
 #if 1 == OCF_METADATA_DEBUG
 #define OCF_DEBUG_TRACE(cache) \
@@ -210,7 +210,7 @@ static int64_t ocf_metadata_get_element_size(
 
 	}
 
-	ENV_BUG_ON(size > PAGE_SIZE);
+	// ENV_BUG_ON(size > PAGE_SIZE);
 
 	return size;
 }

@@ -5,7 +5,7 @@
 
 #include "ocf_space.h"
 
-#define MAX_FREQ 1024  // Maximum frequency bucket count (tune as needed)
+#define MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)
 
 struct ocf_lfu_meta {
     uint32_t freq;          // Access frequency counter
