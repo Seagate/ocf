@@ -21,7 +21,7 @@ struct ocf_lru_meta * ocf_metadata_get_lru(struct ocf_cache *cache,
 			&(ctrl->raw_desc[metadata_segment_lru]), line);
 }
 
-struct ocf_lru_meta * ocf_metadata_get_lfu(struct ocf_cache *cache,
+struct ocf_lfu_meta * ocf_metadata_get_lfu(struct ocf_cache *cache,
 		ocf_cache_line_t line)
 {
 	struct ocf_metadata_ctrl *ctrl

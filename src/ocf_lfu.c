@@ -162,7 +162,7 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
     for (; iter->current_freq < MAX_FREQ; iter->current_freq++) {
         bucket = &part->runtime->freq_buckets[iter->current_freq];
 
-        ocf_metadata_lru_wr_lock(&cache->metadata.lock, iter->current_freq);
+        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, iter->current_freq);
 
         cline = bucket->tail;
 
@@ -174,6 +174,7 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
 
             ocf_metadata_get_core_info(cache, cline, core_id, core_line);
 
+            // Avoid evicting current request target cacheline
             if (*core_id == ocf_core_get_id(iter->req->core) &&
                 *core_line >= iter->req->core_line_first &&
                 *core_line <= iter->req->core_line_last) {
