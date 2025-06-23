@@ -74,6 +74,51 @@ static inline void ocf_metadata_lru_unlock_all(
 #define OCF_METADATA_LRU_UNLOCK_ALL() \
 	ocf_metadata_lru_unlock_all(&cache->metadata.lock)
 
+/* LFU Locks */
+
+static inline void ocf_metadata_lfu_wr_lock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_rwlock_write_lock(&metadata_lock->lfu[freq]);
+}
+
+static inline void ocf_metadata_lfu_wr_unlock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_rwlock_write_unlock(&metadata_lock->lfu[freq]);
+}
+
+static inline void ocf_metadata_lfu_rd_lock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_rwlock_read_lock(&metadata_lock->lfu[freq]);
+}
+
+static inline void ocf_metadata_lfu_rd_unlock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_rwlock_read_unlock(&metadata_lock->lfu[freq]);
+}
+static inline void ocf_metadata_lfu_wr_lock_all(
+		struct ocf_metadata_lock *metadata_lock)
+{
+	uint32_t i;
+
+	for (i = 0; i < MAX_FREQ; i++)
+		ocf_metadata_lfu_wr_lock(metadata_lock, i);
+}
+
+static inline void ocf_metadata_lfu_wr_unlock_all(
+		struct ocf_metadata_lock *metadata_lock)
+{
+	uint32_t i;
+
+	for (i = 0; i < MAX_FREQ; i++)
+		ocf_metadata_lfu_wr_unlock(metadata_lock, i);
+}
+
+/* Metadata Partition Locks */
+
 static inline void ocf_metadata_partition_lock(
 		struct ocf_metadata_lock *metadata_lock,
 		ocf_part_id_t part_id)
