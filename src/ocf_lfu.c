@@ -48,6 +48,25 @@ void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
     meta->next = END_MARKER;
 }
 
+static inline void _lfu_init(struct ocf_lfu_list *list)
+{
+	list->num_nodes = 0;
+	list->head = END_MARKER;
+	list->tail = END_MARKER;
+}
+
+void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part)
+{
+	uint32_t i;
+
+	for (i = 0; i < MAX_FREQ; i++) {
+		_lfu_init(&part->runtime->freq_buckets[i]);
+	}
+
+	// Reset the global count of cache lines in this partition
+	env_atomic_set(&part->runtime->curr_size, 0);
+}
+
 /** Add cache line to frequency bucket list head */
 static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline)
 {
@@ -239,12 +258,25 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
     return END_MARKER;
 }
 
-/** Move cache line to another cache partition */
+/** Move cache line to another cache partition, wrapped with locks */
+void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
+		struct ocf_part *src_part, struct ocf_part *dst_part)
+{
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+	ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
+	ocf_lfu_repart_locked(cache, cline, src_part, dst_part);
+    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
+}
+
+/** Move cache line to another cache partition
+ * Caller must acquire write locks
+ */
 void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
                            struct ocf_part *src, struct ocf_part *dst)
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t freq = meta->freq;
+
     struct ocf_lfu_list *src_list, *dst_list;
 
     ENV_BUG_ON(freq >= MAX_FREQ);
@@ -277,6 +309,22 @@ void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
 
     // Step 3: Update partition metadata
     ocf_metadata_set_partition_id(cache, cline, dst->id);
+
+    // Release write lock
+    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, freq);
+}
+
+/** 
+ * Remap cacheline
+ * Caller must hold metadata lock
+ */
+void ocf_lfu_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+{
+	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
+	struct ocf_part *part = &cache->user_parts[part_id].part;
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+
+	ocf_lfu_repart(cache, cline, part, &cache->free);
 }
 
 /**
@@ -299,7 +347,7 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
 
     while (iter->current_freq < MAX_FREQ) {
         // Lock metadata for current frequency bucket
-        ocf_metadata_lru_wr_lock(&cache->metadata.lock, iter->current_freq);
+        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, iter->current_freq);
 
         // Get the current bucket (tail = least recently used at this frequency)
         bucket = &free->runtime->freq_buckets[iter->current_freq];
@@ -316,12 +364,12 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
             // Move cacheline from free partition to destination
             ocf_lfu_repart_locked(cache, cline, free, dst_part);
 
-            ocf_metadata_lru_wr_unlock(&cache->metadata.lock, iter->current_freq);
+            ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
             return cline;
         }
 
         // No usable cacheline in this frequency bucket
-        ocf_metadata_lru_wr_unlock(&cache->metadata.lock, iter->current_freq);
+        ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
 
         // Advance to next frequency bucket
         iter->current_freq++;

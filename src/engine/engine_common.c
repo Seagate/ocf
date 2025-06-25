@@ -207,7 +207,8 @@ void ocf_engine_set_hot(struct ocf_request *req)
 
 		if (status == LOOKUP_HIT || status == LOOKUP_HIT_INVALID) {
 			/* Update eviction (LRU) */
-			ocf_lru_hot_cline(cache, entry->coll_idx);
+			// ocf_lru_hot_cline(cache, entry->coll_idx);
+			ocf_lfu_increment(cache, entry->coll_idx);
 		}
 	}
 }

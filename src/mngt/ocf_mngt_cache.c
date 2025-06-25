@@ -29,6 +29,7 @@
 #include "../concurrency/ocf_concurrency.h"
 #include "../concurrency/ocf_metadata_concurrency.h"
 #include "../ocf_lru.h"
+#include "../ocf_lfu.h"
 #include "../ocf_ctx_priv.h"
 #include "../cleaning/cleaning.h"
 #include "../promotion/ops.h"
@@ -227,7 +228,8 @@ static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
 	ocf_part_id_t part_id;
 
 	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
-		ocf_lru_init(cache, &cache->user_parts[part_id].part);
+		// ocf_lru_init(cache, &cache->user_parts[part_id].part);
+		ocf_lfu_init(cache, &cache->user_parts[part_id].part);
 
 	ocf_lru_init(cache, &cache->free);
 	ocf_lru_init(cache, &cache->free_detached);
@@ -575,7 +577,8 @@ static void ocf_mngt_cline_reset_metadata(ocf_cache_t cache,
 
 	ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
 
-	ocf_lru_add_free(cache, cline);
+	// ocf_lru_add_free(cache, cline);
+	ocf_lfu_add(cache, cline); // should already be in freelist?
 }
 
 static void ocf_mngt_cline_rebuild_metadata(ocf_cache_t cache,
@@ -594,9 +597,11 @@ static void ocf_mngt_cline_rebuild_metadata(ocf_cache_t cache,
 			cline);
 	ocf_hb_id_naked_unlock_wr(&cache->metadata.lock, hash_index);
 
-	ocf_lru_init_cline(cache, cline);
+	// ocf_lru_init_cline(cache, cline);
+	ocf_lfu_init_cline(cache, cline);
 
-	ocf_lru_add(cache, cline);
+	// ocf_lru_add(cache, cline);
+	ocf_lfu_add(cache, cline);
 }
 
 static int ocf_mngt_rebuild_metadata_handle(ocf_parallelize_t parallelize,
