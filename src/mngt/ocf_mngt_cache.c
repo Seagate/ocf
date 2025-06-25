@@ -1464,7 +1464,9 @@ static void _ocf_mngt_attach_populate_free(ocf_pipeline_t pipeline,
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
-	ocf_lru_populate(cache, _ocf_mngt_attach_populate_free_complete,
+	// ocf_lru_populate(cache, _ocf_mngt_attach_populate_free_complete,
+			// context);
+	ocf_lfu_populate(cache, _ocf_mngt_attach_populate_free_complete,
 			context);
 }
 

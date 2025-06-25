@@ -26,4 +26,8 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part);
 
+typedef void (*ocf_lfu_populate_end_t)(void *priv, int error);
+void ocf_lfu_populate(ocf_cache_t cache,
+		ocf_lfu_populate_end_t cmpl, void *priv);
+
 #endif

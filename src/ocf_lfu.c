@@ -31,9 +31,14 @@ static inline struct ocf_lfu_list *lfu_get_cline_list(ocf_cache_t cache,
 
 	part_id = ocf_metadata_get_partition_id(cache, cline);
 
-	ENV_BUG_ON(part_id > OCF_USER_IO_CLASS_MAX);
-	part = &cache->user_parts[part_id].part;
-
+    // ocf_cache_log(cache, log_debug, "%d\n", part_id);
+	// ENV_BUG_ON(part_id > OCF_USER_IO_CLASS_MAX);
+    if(part_id == PARTITION_FREELIST) {
+        part = &cache->free;
+    } else {
+        part = &cache->user_parts[part_id].part;
+    }
+	
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
 	return ocf_lfu_get_list(part, meta->freq);
@@ -499,4 +504,100 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
 
     // Return the number of cache lines actually assigned
     return i;
+}
+
+/**
+ * Populate functions
+ */
+
+struct ocf_lfu_populate_context {
+	ocf_cache_t cache;
+	env_atomic curr_size;
+
+	ocf_lfu_populate_end_t cmpl;
+	void *priv;
+};
+
+/** LFU Populate
+ * Function called inside each worker shard */
+static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
+		void *priv, unsigned shard_id, unsigned shards_cnt)
+{
+	struct ocf_lfu_populate_context *context = priv;
+	ocf_cache_t cache = context->cache;
+	ocf_cache_line_t cnt, cline;
+	ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
+	struct ocf_generator_bisect_state generator;
+	struct ocf_lru_list *list;
+	unsigned freq = shard_id;
+	unsigned step = 0;
+	uint32_t portion, offset;
+	uint32_t i, idx;
+
+	portion = OCF_DIV_ROUND_UP((uint64_t)entries, shards_cnt);
+	offset = shard_id * portion / shards_cnt;
+	ocf_generator_bisect_init(&generator, portion, offset);
+
+	list = ocf_lfu_get_list(&cache->free, freq);
+    
+	cnt = 0;
+	for (i = 0; i < portion; i++) {
+		OCF_COND_RESCHED_DEFAULT(step);
+
+		idx = ocf_generator_bisect_next(&generator);
+		cline = idx * shards_cnt + shard_id;
+		if (cline >= entries)
+			continue;
+
+		ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
+
+		ocf_lfu_add(cache, cline);
+
+		cnt++;
+	}
+
+	env_atomic_add(cnt, &context->curr_size);
+
+	return 0;
+}
+
+/** LFU Populate
+ * Finish callback */
+static void ocf_lfu_populate_finish(ocf_parallelize_t parallelize,
+		void *priv, int error)
+{
+	struct ocf_lfu_populate_context *context = priv;
+
+	env_atomic_set(&context->cache->free.runtime->curr_size,
+		env_atomic_read(&context->curr_size));
+
+	context->cmpl(context->priv, error);
+
+	ocf_parallelize_destroy(parallelize);
+}
+
+/** LFU Populate
+* put invalid cachelines on freelist partition lru list  */
+void ocf_lfu_populate(ocf_cache_t cache,
+		ocf_lfu_populate_end_t cmpl, void *priv)
+{
+	struct ocf_lfu_populate_context *context;
+	ocf_parallelize_t parallelize;
+	int result;
+
+	result = ocf_parallelize_create(&parallelize, cache, MAX_FREQ,
+			sizeof(*context), ocf_lfu_populate_handle,
+			ocf_lfu_populate_finish, false);
+	if (result) {
+		cmpl(priv, result);
+		return;
+	}
+
+	context = ocf_parallelize_get_priv(parallelize);
+	context->cache = cache;
+	env_atomic_set(&context->curr_size, 0);
+	context->cmpl = cmpl;
+	context->priv = priv;
+
+	ocf_parallelize_run(parallelize);
 }
