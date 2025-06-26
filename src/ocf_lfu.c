@@ -525,7 +525,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
 	ocf_cache_line_t cnt, cline;
 	ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
 	struct ocf_generator_bisect_state generator;
-	struct ocf_lru_list *list;
+	struct ocf_lfu_list *list;
 	unsigned freq = shard_id;
 	unsigned step = 0;
 	uint32_t portion, offset;
