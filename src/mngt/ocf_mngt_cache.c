@@ -2322,7 +2322,7 @@ static void ocf_mngt_cache_close_cache_volume(ocf_pipeline_t pipeline,
 	struct ocf_mngt_cache_unplug_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
-	ocf_cache_log(cache, log_debug, "ocf_mngt_cache_close_cache_volume\n");
+	// ocf_cache_log(cache, log_debug, "ocf_mngt_cache_close_cache_volume\n");
 
 	ocf_volume_close(&cache->device->volume);
 
@@ -2335,7 +2335,7 @@ static void ocf_mngt_cache_deinit_cache_volume(ocf_pipeline_t pipeline,
 	struct ocf_mngt_cache_unplug_context *context = priv;
 	ocf_cache_t cache = context->cache;
 
-	ocf_cache_log(cache, log_debug, "ocf_mngt_cache_deinit_cache_volume\n");
+	// ocf_cache_log(cache, log_debug, "ocf_mngt_cache_deinit_cache_volume\n");
 
 	ocf_volume_deinit(&cache->device->volume);
 
