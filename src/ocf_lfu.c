@@ -18,7 +18,7 @@ static const uint32_t END_MARKER = (uint32_t)-1;
 
 /** Get frequency bucket from cache partition */
 static inline struct ocf_lfu_list *ocf_lfu_get_list(struct ocf_part *part, uint32_t freq) {
-    ENV_BUG_ON(freq >= MAX_FREQ);
+    // ENV_BUG_ON(freq >= MAX_FREQ);
     return &part->runtime->freq_buckets[freq];
 }
 

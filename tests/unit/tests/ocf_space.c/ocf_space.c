@@ -77,6 +77,25 @@ uint32_t __wrap_ocf_lru_req_clines(struct ocf_request *req,
 	return mock();
 }
 
+uint32_t __wrap_ocf_lfu_req_clines(struct ocf_request *req,
+	struct ocf_part *src_part, uint32_t cline_no)
+{
+	struct test_cache *tcache = (struct test_cache *)req->cache;
+	unsigned overflown_consumed;
+
+	overflown_consumed = min(cline_no, tcache->overflow[src_part->id]);
+
+	tcache->overflow[src_part->id] -= overflown_consumed;
+	tcache->evictable[src_part->id] -= cline_no;
+	tcache->req_unmapped -= cline_no;
+
+	check_expected(src_part);
+	check_expected(cline_no);
+	function_called();
+
+	return mock();
+}
+
 int __wrap_ocf_log_raw(ocf_logger_t logger, ocf_logger_lvl_t lvl,
 		const char *fmt, ...)
 {
@@ -198,11 +217,18 @@ uint32_t __wrap_ocf_engine_unmapped_count(struct ocf_request *req)
 
 #define _expect_evict_call(tcache, part_id, req_count, ret_count) \
 	do { \
-		expect_value(__wrap_ocf_lru_req_clines, src_part, &tcache.cache.user_parts[part_id].part); \
-		expect_value(__wrap_ocf_lru_req_clines, cline_no, req_count); \
-		expect_function_call(__wrap_ocf_lru_req_clines); \
-		will_return(__wrap_ocf_lru_req_clines, ret_count); \
+		expect_value(__wrap_ocf_lfu_req_clines, src_part, &tcache.cache.user_parts[part_id].part); \
+		expect_value(__wrap_ocf_lfu_req_clines, cline_no, req_count); \
+		expect_function_call(__wrap_ocf_lfu_req_clines); \
+		will_return(__wrap_ocf_lfu_req_clines, ret_count); \
 	} while (false);
+	// do { \
+	// 	expect_value(__wrap_ocf_lru_req_clines, src_part, &tcache.cache.user_parts[part_id].part); \
+	// 	expect_value(__wrap_ocf_lru_req_clines, cline_no, req_count); \
+	// 	expect_function_call(__wrap_ocf_lru_req_clines); \
+	// 	will_return(__wrap_ocf_lru_req_clines, ret_count); \
+	// } while (false);
+	
 
 static void ocf_remap_do_test01(void **state)
 {
