@@ -314,9 +314,6 @@ void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
 
     // Step 3: Update partition metadata
     ocf_metadata_set_partition_id(cache, cline, dst->id);
-
-    // Release write lock
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, freq);
 }
 
 /** 
@@ -600,4 +597,101 @@ void ocf_lfu_populate(ocf_cache_t cache,
 	context->priv = priv;
 
 	ocf_parallelize_run(parallelize);
+}
+
+/** Functionality copied over from LRU */
+static bool _is_cache_line_acting(struct ocf_cache *cache,
+		uint32_t cache_line, ocf_core_id_t core_id,
+		uint64_t start_line, uint64_t end_line)
+{
+	ocf_core_id_t tmp_core_id;
+	uint64_t core_line;
+
+	ocf_metadata_get_core_info(cache, cache_line,
+		&tmp_core_id, &core_line);
+
+	if (core_id != OCF_CORE_ID_INVALID) {
+		if (core_id != tmp_core_id)
+			return false;
+
+		if (core_line < start_line || core_line > end_line)
+			return false;
+
+	} else if (tmp_core_id == OCF_CORE_ID_INVALID) {
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * Iterates over cache lines that belong to the core device with
+ * core ID = core_id  whose core byte addresses are in the range
+ * [start_byte, end_byte] and applies actor(cache, cache_line) to all
+ * matching cache lines
+ *
+ * set partition_id to PARTITION_UNSPECIFIED to not care about partition_id
+ *
+ * global metadata write lock must be held before calling this function
+ */
+int ocf_metadata_actor(struct ocf_cache *cache,
+		ocf_part_id_t part_id, ocf_core_id_t core_id,
+		uint64_t start_byte, uint64_t end_byte,
+		ocf_metadata_actor_t actor)
+{
+	uint32_t step = 0;
+	uint64_t start_line, end_line;
+	int ret = 0;
+	struct ocf_alock *c = ocf_cache_line_concurrency(cache);
+	int clean;
+	struct ocf_lfu_list *list;
+	struct ocf_part *part;
+	unsigned i, cline;
+	struct ocf_lfu_meta *node;
+
+	start_line = ocf_bytes_2_lines(cache, start_byte);
+	end_line = ocf_bytes_2_lines(cache, end_byte);
+
+	if (part_id == PARTITION_UNSPECIFIED) {
+		for (cline = 0; cline < cache->device->collision_table_entries;
+				++cline) {
+			if (_is_cache_line_acting(cache, cline, core_id,
+					start_line, end_line)) {
+				if (ocf_cache_line_is_used(c, cline))
+					ret = -OCF_ERR_AGAIN;
+				else
+					actor(cache, cline);
+			}
+
+			OCF_COND_RESCHED_DEFAULT(step);
+		}
+		return ret;
+	}
+
+	ENV_BUG_ON(part_id == PARTITION_FREELIST);
+	part = &cache->user_parts[part_id].part;
+
+	for (i = 0; i < MAX_FREQ; i++) {
+		list = ocf_lfu_get_list(part, i);
+
+        cline = list->tail;
+        while (cline != END_MARKER) {
+            node = ocf_metadata_get_lfu(cache, cline);
+            if (!_is_cache_line_acting(cache, cline,
+                    core_id, start_line,
+                    end_line)) {
+                cline = node->prev;
+                continue;
+            }
+            if (ocf_cache_line_is_used(c, cline))
+                ret = -OCF_ERR_AGAIN;
+            else
+                actor(cache, cline);
+            cline = node->prev;
+            OCF_COND_RESCHED_DEFAULT(step);
+        }
+	}
+
+	return ret;
 }

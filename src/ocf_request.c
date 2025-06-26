@@ -14,7 +14,7 @@
 #include "ocf_env_refcnt.h"
 #include "ocf/ocf_prefetch.h"
 
-#define OCF_UTILS_RQ_DEBUG 0
+#define OCF_UTILS_RQ_DEBUG 1
 
 #if 1 == OCF_UTILS_RQ_DEBUG
 #define OCF_DEBUG_TRACE(cache) \
