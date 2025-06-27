@@ -157,6 +157,8 @@ static void _lfu_init_test04(void **state)
     // Setup initial metadata
     memset(meta, 0, sizeof(meta));
 
+	print_test_description("lfu: test increment frequency\n");
+
 	// Add to cache
 	ocf_lfu_add(NULL, cline);
 
@@ -183,6 +185,8 @@ static void _lfu_init_test05(void **state)
 
     // Setup initial metadata
     memset(meta, 0, sizeof(meta));
+
+	print_test_description("lfu: test increment frequency when maxed\n");
 
 	// Add to cache
 	meta[cline].freq = MAX_FREQ - 1;
