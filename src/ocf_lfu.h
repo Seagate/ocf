@@ -21,7 +21,6 @@ struct ocf_lfu_list {
 
 void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline);
-ocf_cache_line_t ocf_lfu_select_victim(ocf_cache_t cache);
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part);
