@@ -46,6 +46,8 @@
 static struct ocf_lfu_meta meta[META_COUNT];
 static struct ocf_lfu_list freq_buckets[MAX_FREQ];
 
+/** Wrappers */
+
 struct ocf_cache_line_concurrency *__wrap_ocf_cache_line_concurrency(ocf_cache_t cache)
 {
 	return NULL;
@@ -81,6 +83,8 @@ static int setup_freq_buckets(void **state) {
     }
     return 0; 
 }
+
+/** Test Cases */
 
 /** Test Init */
 static void _lfu_init_test01(void **state)
