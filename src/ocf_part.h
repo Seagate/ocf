@@ -36,7 +36,7 @@ struct ocf_part_runtime {
 	env_atomic curr_size;
 	env_atomic evict_counter;
 	struct ocf_lru_part_meta lru[OCF_NUM_LRU_LISTS];
-	struct ocf_lfu_list freq_buckets[MAX_FREQ];
+	struct ocf_lfu_bucket freq_buckets[MAX_FREQ];
 };
 
 typedef bool ( *_lru_hash_locked_pfn)(struct ocf_request *req,

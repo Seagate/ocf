@@ -59,7 +59,7 @@ struct ocf_lfu_meta *__wrap_ocf_metadata_get_lfu(ocf_cache_t cache, ocf_cache_li
 	return &meta[line];
 }
 
-struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t freq) 
+struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t freq, bool clean) 
 {
 	assert(freq < MAX_FREQ);
 	return &freq_buckets[freq];

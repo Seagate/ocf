@@ -19,11 +19,17 @@ struct ocf_lfu_list {
     uint32_t num_nodes;     // Total nodes in this freq bucket
 };
 
+struct ocf_lfu_bucket {
+    struct ocf_lfu_list clean; // Clean list in freq bucket
+    struct ocf_lfu_list dirty; // Dirty list in freq bucket
+};
+
 void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part);
+void ocf_lfu_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 
 typedef void (*ocf_lfu_populate_end_t)(void *priv, int error);
 void ocf_lfu_populate(ocf_cache_t cache,

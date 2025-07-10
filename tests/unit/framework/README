@@ -10,9 +10,9 @@ GENERATING NEW TEST
 	Afterwards, add the folder into UT_dir/framework/tests_config.py DIRECTORIES_WITH_TESTS_LIST
 
 BUILDING TESTS
-	Run UT_dir/framework/prepare_sources_for_testing.py and then UT_dir/framework/run_unit_tests.py
+	Run tests/unit/framework/framework/run_unit_tests.py, then tests/unit/framework/prepare_sources_for_testing.py and then tests/unit/framework/framework/run_unit_tests.py again.
 
-	Logs of build and run are stored under UT_dir/logs for debugging
+	Logs of build and run are stored under tests/unit/framework/logs for debugging
 
 RUNNING SINGLE TEST
 	Executable tests files are stored by default in 'UT_dir/build/sources_to_test_repository/'
