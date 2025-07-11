@@ -576,7 +576,7 @@ void ocf_alock_unlock_one_rd(struct ocf_alock *alock,
 {
 	unsigned long flags = 0;
 
-	OCF_DEBUG_CACHE(alock->cache, "Cache entry unlock one rd = %u", entry);
+	// OCF_DEBUG_CACHE(alock->cache, "Cache entry unlock one rd = %u", entry);
 
 	/* Lock waiters list */
 	ocf_alock_waitlist_lock(alock, entry, flags);
@@ -658,7 +658,7 @@ void ocf_alock_unlock_one_wr(struct ocf_alock *alock,
 	unsigned long flags = 0;
 
 	OCF_DEBUG_CACHE(alock->cache, "Cache entry unlock one wr = %u", entry);
-
+	
 	/* Lock waiters list */
 	ocf_alock_waitlist_lock(alock, entry, flags);
 	ocf_alock_unlock_one_wr_common(alock, entry);

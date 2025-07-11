@@ -185,6 +185,7 @@ void set_cache_line_clean(struct ocf_cache *cache, uint8_t start_bit,
 			env_atomic_dec(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
 			// ocf_lru_clean_cline(cache, part, line);
+			ocf_lfu_clean_cline(cache, part, line);
 			ocf_purge_cleaning_policy(cache, line);
 		}
 	}
@@ -227,6 +228,7 @@ void set_cache_line_dirty(struct ocf_cache *cache, uint8_t start_bit,
 			env_atomic_inc(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
 			// ocf_lru_dirty_cline(cache, part, line);
+			ocf_lfu_dirty_cline(cache, part, line);
 		}
 	}
 

@@ -91,7 +91,7 @@ static inline uint32_t ocf_evict_part_do(struct ocf_request *req,
 	}
 
 	// return ocf_lru_req_clines(req, &user_part->part, to_evict);
-	return ocf_lfu_req_clines(req, &user_part, to_evict);
+	return ocf_lfu_req_clines(req, &user_part->part, to_evict);
 }
 
 static inline uint32_t ocf_evict_user_partitions_once(ocf_cache_t cache,
