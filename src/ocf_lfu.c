@@ -197,6 +197,21 @@ static void ocf_lfu_invalidate(ocf_cache_t cache, ocf_cache_line_t cline,
     env_atomic_dec(&core->runtime_meta->part_counters[part_id].cached_clines);
 }
 
+/** Try to get hash bucket lock */
+static inline bool _lfu_trylock_hash(struct ocf_lfu_iter *iter,
+                                     ocf_core_id_t core_id, uint64_t core_line)
+{
+    if (iter->hash_locked != NULL && iter->hash_locked(
+                                         iter->req, core_id, core_line))
+    {
+        return true;
+    }
+
+    return ocf_hb_cline_naked_trylock_wr(
+        &iter->cache->metadata.lock,
+        core_id, core_line);
+}
+
 /** Check if hash bucket was locked by the caller and unlock if needed (utility function) */
 static inline void _lfu_unlock_hash(struct ocf_lfu_iter *iter,
                                     ocf_core_id_t core_id, uint64_t core_line)
@@ -244,7 +259,7 @@ static inline void lfu_iter_eviction_init(struct ocf_lfu_iter *iter,
 /** See if you can aquire cacheline lock for eviction */
 static inline bool _lfu_iter_eviction_lock(struct ocf_lfu_iter *iter,
                                            ocf_cache_line_t cache_line,
-                                           ocf_core_id_t *core_id, 
+                                           ocf_core_id_t *core_id,
                                            uint64_t *core_line)
 {
 
@@ -270,8 +285,7 @@ static inline bool _lfu_iter_eviction_lock(struct ocf_lfu_iter *iter,
     }
 
     // If cannot acquire hash lock
-    if (iter->hash_locked == NULL || !iter->hash_locked(iter->req, core_id, core_line) ||
-        !ocf_hb_cline_naked_trylock_wr(&iter->cache->metadata.lock, *core_id, *core_line))
+    if (!_lfu_trylock_hash(iter, *core_id, *core_line))
     {
         // Release lock on cache line
         ocf_cache_line_unlock_wr(iter->c, cache_line);
@@ -467,12 +481,13 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
         {
             // Move cacheline from free partition to destination
             ocf_lfu_repart_locked(cache, cline, free, dst_part, 0);
-        } 
+        }
 
         // Release bucket's lock
         ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
-        
-        if (cline == END_MARKER) { 
+
+        if (cline == END_MARKER)
+        {
             // No usable cacheline in this frequency bucket
             // Advance to next frequency bucket
             iter->current_freq++;
