@@ -83,11 +83,7 @@ void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part)
     env_atomic_set(&part->runtime->curr_size, 0);
 }
 
-/** Add cache line to frequency bucket list head */
-static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
-{
-    struct ocf_lfu_part *part = lfu_get_cline_part(cache, cline);
-    struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
+static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_line_t cline) {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
     meta->prev = END_MARKER;
@@ -104,6 +100,15 @@ static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_
         list->tail = cline;
 
     list->num_nodes++;
+}
+
+/** Add cache line to frequency bucket list head */
+static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
+{
+    struct ocf_lfu_part *part = lfu_get_cline_part(cache, cline);
+    struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
+    
+    add_to_list(list, cache, cline);
 }
 
 /** Remove cache line from its current freq bucket */
@@ -186,7 +191,6 @@ static void ocf_lfu_invalidate(ocf_cache_t cache, ocf_cache_line_t cline,
 
     // Step 3: Remove cache line from collision table and from LFU frequency bucket
     ocf_metadata_remove_from_collision(cache, cline, part_id);
-    ocf_lfu_remove(cache, cline); // LFU-specific removal
 
     // Step 4: End shared access
     ocf_metadata_end_collision_shared_access(cache, cline);
@@ -893,6 +897,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
         .io_queue = io_queue};
     struct flush_data *entries = ctx->entries;
     struct ocf_lfu_iter iter;
+    unsigned freq;
     int cnt;
     unsigned i;
     unsigned lock_idx;
@@ -910,6 +915,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
     }
 
     ctx->cache = cache;
+    freq = io_queue->lru_idx++ % MAX_FREQ;
 
     lock_idx = ocf_metadata_concurrency_next_idx(io_queue);
     ocf_metadata_start_shared_access(&cache->metadata.lock, lock_idx);
@@ -917,7 +923,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
     ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
 
     // Gather candidates by frequency (lowest first)
-    lfu_iter_cleaning_init(&iter, cache, &user_part->part, count);
+    lfu_iter_cleaning_init(&iter, cache, &user_part->part, freq);
 
     for (i = 0; i < count; i++)
     {

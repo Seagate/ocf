@@ -17,7 +17,7 @@
 #include "../ocf_queue_priv.h"
 #include "ocf_env_refcnt.h"
 
-#define OCF_UTILS_CLEANER_DEBUG 0
+#define OCF_UTILS_CLEANER_DEBUG 1
 
 #if 1 == OCF_UTILS_CLEANER_DEBUG
 #define OCF_DEBUG_TRACE(cache) \
