@@ -9,9 +9,11 @@
  * <functions_to_leave>
  * ocf_lfu_add
  * ocf_lfu_remove
+ * add_to_list
  * add_to_freq_bucket
  * remove_from_freq_bucket
  * ocf_lfu_increment
+ * metadata_test_dirty
  * </functions_to_leave>
  */
 
@@ -65,12 +67,11 @@ struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t fre
 	return &freq_buckets[freq];
 }
 
-struct ocf_lfu_list *__wrap_lfu_get_cline_list(ocf_cache_t cache,
-		ocf_cache_line_t cline)
-{
-	struct ocf_lfu_meta *meta_item = &meta[cline];
-	return &freq_buckets[meta_item->freq];
-}	
+// bool __wrap_metadata_test_dirty(struct ocf_cache *cache,
+// 		ocf_cache_line_t line)
+// {
+// 	return false;
+// }
 
 static const unsigned END_MARKER = -1;
 

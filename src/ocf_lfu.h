@@ -24,6 +24,12 @@ struct ocf_lfu_bucket {
     struct ocf_lfu_list dirty; // Dirty list in freq bucket
 };
 
+struct ocf_part;
+struct ocf_user_part;
+struct ocf_part_runtime;
+struct ocf_part_cleaning_ctx;
+struct ocf_request;
+
 void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);
@@ -33,6 +39,8 @@ void ocf_lfu_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 
 void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline);
 void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline);
+void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
+                   ocf_queue_t io_queue, uint32_t count);
 
 typedef void (*ocf_lfu_populate_end_t)(void *priv, int error);
 void ocf_lfu_populate(ocf_cache_t cache,

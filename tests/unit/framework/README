@@ -7,15 +7,15 @@ GENERATING NEW TEST
 	Good practise is to use "add_new_test_file.py" script from test directory (not framework),
 	because it prepend appropriate license header.
 
-	Afterwards, add the folder into UT_dir/framework/tests_config.py DIRECTORIES_WITH_TESTS_LIST
+	Afterwards, add the folder into tests/unit/framework/tests_config.py DIRECTORIES_WITH_TESTS_LIST
 
 BUILDING TESTS
-	Run tests/unit/framework/framework/run_unit_tests.py, then tests/unit/framework/prepare_sources_for_testing.py and then tests/unit/framework/framework/run_unit_tests.py again.
+	Run tests/unit/framework/run_unit_tests.py, then tests/unit/framework/prepare_sources_for_testing.py and then tests/unit/framework/run_unit_tests.py again.
 
 	Logs of build and run are stored under tests/unit/framework/logs for debugging
 
 RUNNING SINGLE TEST
-	Executable tests files are stored by default in 'UT_dir/build/sources_to_test_repository/'
+	Executable tests files are stored by default in 'tests/unit/tests/build/sources_to_test_repository/'
 
 REQUIREMENTS FOR BUILD:
 - cmocka
