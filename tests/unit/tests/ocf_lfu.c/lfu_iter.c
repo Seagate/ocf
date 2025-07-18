@@ -12,6 +12,8 @@
  * lfu_iter_eviction_init
  * lfu_iter_eviction_next
  * lfu_iter_cleaning_next
+ * add_to_freq_bucket
+ * remove_from_freq_bucket
  * </functions_to_leave>
  */
 
@@ -73,20 +75,18 @@ bool __wrap_ocf_cache_line_try_lock_rd(struct ocf_cache_line_concurrency *c,
 	return true;
 }
 
-// Ensure that iterator goes through whole list by mocking a lock failure
 bool __wrap_ocf_cache_line_try_lock_wr(struct ocf_cache_line_concurrency *c,
 		ocf_cache_line_t line)
 {
 	return false;
 }
 
-// Ensure that iterator goes through whole list by mocking a lock failure
 bool __wrap__lfu_iter_eviction_lock(struct ocf_lfu_iter *iter,
                                            ocf_cache_line_t cache_line,
                                            ocf_core_id_t *core_id,
                                            uint64_t *core_line)
 {
-	return false;
+	return true;
 }
 
 /** EVICTION ITERATOR */
@@ -122,7 +122,112 @@ static void lfu_iter_eviction_next_test01(void **state)
 }
 
 // case 1 - all lists with single element
+static void lfu_iter_eviction_next_test02(void **state)
+{
+
+	// Reset
+	memset(meta, 0, sizeof(meta)); // Metadata
+	// Lists
+	for (int i = 0; i < MAX_FREQ; i++) { 
+        freq_buckets[i].head = END_MARKER;
+        freq_buckets[i].tail = END_MARKER;
+        freq_buckets[i].num_nodes = 0;
+    }
+
+	// Setup lists
+	for (int i = 0; i < MAX_FREQ; i++) {
+		// Insert a single element into each frequency bucket
+		ocf_cache_line_t cline = i;
+		meta[cline].freq = i;
+		add_to_freq_bucket(i, NULL, cline);
+	}
+
+	// Setup variables
+	struct ocf_lfu_iter iter;
+	ocf_cache_line_t cache_line, expected_cache_line;
+	unsigned i = 0;
+
+	// Initialize eviction iterator
+	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
+
+	// Try to iterate
+	do {
+		cache_line = lfu_iter_eviction_next(&iter);
+
+		expected_cache_line = i;
+		
+		// Assert that you find the correct cache line for each frequency bucket
+		assert_int_equal(cache_line, expected_cache_line);
+		assert_int_equal(iter.current_freq, i);
+
+		remove_from_freq_bucket(i, NULL, i, true);
+
+		i++;
+	} while (cache_line != -1 && i < MAX_FREQ);
+
+	// Ensure all freq buckets has been visited
+	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
+}
+
 // case 2 - all lists have between 1 and 5 elements, increasingly
+static void lfu_iter_eviction_next_test03(void **state)
+{
+
+	// Reset
+	memset(meta, 0, sizeof(meta)); // Metadata
+	// Lists
+	for (int i = 0; i < MAX_FREQ; i++) { 
+        freq_buckets[i].head = END_MARKER;
+        freq_buckets[i].tail = END_MARKER;
+        freq_buckets[i].num_nodes = 0;
+    }
+
+	// Setup lists
+	for (int i = 0; i < MAX_FREQ; i++) {
+		// Insert a single element into each frequency bucket
+		unsigned num_elements = 1 + i / (MAX_FREQ / 4);
+		for (int j = 0; j < num_elements; j++) {
+			ocf_cache_line_t cline = i * num_elements + j;
+			meta[cline].freq = i;
+			add_to_freq_bucket(i, NULL, cline);
+		}
+	}
+
+	// Setup variables
+	struct ocf_lfu_iter iter;
+	ocf_cache_line_t cache_line, expected_cache_line;
+	unsigned i = 0;
+	unsigned j = 0;
+	unsigned num_elements = 1 + i / (MAX_FREQ / 4);
+
+	// Initialize eviction iterator
+	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
+
+	// Try to iterate
+	do {
+		cache_line = lfu_iter_eviction_next(&iter);
+		
+		expected_cache_line = i * num_elements + j;
+		
+		// Assert that you find the correct cache line for each frequency bucket
+		assert_int_equal(cache_line, expected_cache_line);
+		assert_int_equal(iter.current_freq, i);
+
+		remove_from_freq_bucket(i, NULL, cache_line, true);
+
+		j++;
+
+		if (j == num_elements) {
+			j = 0;
+			i++;
+			num_elements = 1 + i / (MAX_FREQ / 4);
+		}
+	} while (cache_line != -1 && i < MAX_FREQ);
+
+	// Ensure all freq buckets has been visited
+	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
+}
+
 // case 3 - all lists have between 1 and 5 elements, modulo index
 // case 4 - all lists have between 0 and 4 elements, increasingly
 // case 5 - all lists have between 0 and 4 elements, modulo index
@@ -134,10 +239,12 @@ static void lfu_iter_eviction_next_test01(void **state)
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(lfu_iter_eviction_next_test01)
+		cmocka_unit_test(lfu_iter_eviction_next_test01),
+		cmocka_unit_test(lfu_iter_eviction_next_test02),
+		cmocka_unit_test(lfu_iter_eviction_next_test03)
 	};
 
-	print_message("Unit test for lfu_iter_eviction_next\n");
+	print_message("Unit test for lfu iterators\n");
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
