@@ -360,7 +360,138 @@ static void lfu_iter_eviction_next_test05(void **state)
 }
 
 // case 5 - all lists have between 0 and 4 elements, modulo index
+static void lfu_iter_eviction_next_test06(void **state)
+{
+	// Reset
+	memset(meta, 0, sizeof(meta)); // Metadata
+	// Lists
+	for (int i = 0; i < MAX_FREQ; i++) { 
+        freq_buckets[i].head = END_MARKER;
+        freq_buckets[i].tail = END_MARKER;
+        freq_buckets[i].num_nodes = 0;
+    }
+
+	// Setup lists
+	ocf_cache_line_t cline_counter = 0;
+	for (int i = 0; i < MAX_FREQ; i++) {
+		// Determine number of elements for the current bucket
+		unsigned num_elements = i % 5;
+
+		// Insert elements into the bucket
+		for (int j = 0; j < num_elements; j++) {
+			ocf_cache_line_t cline = cline_counter++;
+			meta[cline].freq = i;
+			add_to_freq_bucket(i, NULL, cline);
+		}
+	}
+
+	// Setup variables
+	struct ocf_lfu_iter iter;
+	ocf_cache_line_t cache_line, expected_cache_line = 0;
+	unsigned i = 0;
+	unsigned j = 0;
+	unsigned num_elements = i % 5;
+
+	// Initialize eviction iterator
+	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
+
+	// Try to iterate
+	do {
+		cache_line = lfu_iter_eviction_next(&iter);
+		
+		if(num_elements == 0) {
+			j = 0;
+			i++;
+			num_elements = i % 5;
+			continue;
+		} 
+		
+		// Assert that you find the correct cache line for each frequency bucket
+		assert_int_equal(cache_line, expected_cache_line);
+		assert_int_equal(iter.current_freq, i);
+
+		remove_from_freq_bucket(i, NULL, cache_line, true);
+
+		expected_cache_line++;
+
+		j++;
+
+		if (j == num_elements) {
+			j = 0;
+			i++;
+			num_elements = i % 5;
+		}
+	} while (cache_line != -1 && i < MAX_FREQ);
+
+	// Ensure all freq buckets has been visited
+	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
+}
+
 // case 6 - list length increasing by 1 from 0
+// static void lfu_iter_eviction_next_test07(void **state)
+// {
+// 	// Reset
+// 	memset(meta, 0, sizeof(meta)); // Metadata
+// 	// Lists
+// 	for (int i = 0; i < MAX_FREQ; i++) { 
+//         freq_buckets[i].head = END_MARKER;
+//         freq_buckets[i].tail = END_MARKER;
+//         freq_buckets[i].num_nodes = 0;
+//     }
+
+// 	// Setup lists
+// 	ocf_cache_line_t cline_counter = 0;
+// 	for (int i = 0; i < MAX_FREQ; i++) {
+// 		// Determine number of elements for the current bucket
+// 		unsigned num_elements = i;
+
+// 		// Insert elements into the bucket
+// 		for (int j = 0; j < num_elements; j++) {
+// 			ocf_cache_line_t cline = cline_counter++;
+// 			meta[cline].freq = i;
+// 			add_to_freq_bucket(i, NULL, cline);
+// 		}
+// 	}
+
+// 	// Setup variables
+// 	struct ocf_lfu_iter iter;
+// 	ocf_cache_line_t cache_line, expected_cache_line = 0;
+// 	unsigned i = 0;
+// 	unsigned j = 0;
+
+// 	// Initialize eviction iterator
+// 	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
+
+// 	// Try to iterate
+// 	do {
+// 		cache_line = lfu_iter_eviction_next(&iter);
+		
+// 		if(i == 0) {
+// 			j = 0;
+// 			i++;
+// 			continue;
+// 		} 
+		
+// 		// Assert that you find the correct cache line for each frequency bucket
+// 		assert_int_equal(cache_line, expected_cache_line);
+// 		assert_int_equal(iter.current_freq, i);
+
+// 		remove_from_freq_bucket(i, NULL, cache_line, true);
+
+// 		expected_cache_line++;
+
+// 		j++;
+
+// 		if (j == i) {
+// 			j = 0;
+// 			i++;
+// 		}
+// 	} while (cache_line != -1 && i < MAX_FREQ);
+
+// 	// Ensure all freq buckets has been visited
+// 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
+// }
+
 // case 7 - list length increasing by 1 from 1
 // case 8 - list length increasing by 4 from 0
 // case 9 - list length increasing by 4 from 1
@@ -373,6 +504,7 @@ int main(void)
 		cmocka_unit_test(lfu_iter_eviction_next_test03),
 		cmocka_unit_test(lfu_iter_eviction_next_test04),
 		cmocka_unit_test(lfu_iter_eviction_next_test05),
+		cmocka_unit_test(lfu_iter_eviction_next_test06)
 	};
 
 	print_message("Unit test for lfu iterators\n");
