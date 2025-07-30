@@ -36,6 +36,11 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part);
 void ocf_lfu_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
+uint32_t ocf_lfu_req_clines(struct ocf_request *req,
+                            struct ocf_part *src_part,
+                            uint32_t cline_no);
+void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
+                    struct ocf_part *src_part, struct ocf_part *dst_part);
 
 void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline);
 void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline);
