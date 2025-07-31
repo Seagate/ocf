@@ -105,7 +105,7 @@ static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_
 /** Add cache line to frequency bucket list head */
 static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
 {
-    struct ocf_lfu_part *part = lfu_get_cline_part(cache, cline);
+    struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
     
     add_to_list(list, cache, cline);
@@ -114,7 +114,7 @@ static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_
 /** Remove cache line from its current freq bucket */
 static void remove_from_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
 {
-    struct ocf_lfu_part *part = lfu_get_cline_part(cache, cline);
+    struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
@@ -957,8 +957,8 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-    remove_from_freq_bucket(meta->freq, cache, cline, false);
-    add_to_freq_bucket(meta->freq, cache, cline, true);
+    remove_from_freq_bucket(meta->freq, cache, cline, true);
+    add_to_freq_bucket(meta->freq, cache, cline, false);
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
@@ -972,7 +972,7 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-    remove_from_freq_bucket(meta->freq, cache, cline, true);
-    add_to_freq_bucket(meta->freq, cache, cline, false);
+    remove_from_freq_bucket(meta->freq, cache, cline, false);
+    add_to_freq_bucket(meta->freq, cache, cline, true);
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
