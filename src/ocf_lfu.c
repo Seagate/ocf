@@ -309,68 +309,6 @@ static inline bool _lfu_iter_eviction_lock(struct ocf_lfu_iter *iter,
     return true;
 }
 
-/** Advance LFU eviction iterator, find next eviction candidate */
-static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
-                                                      struct ocf_part *dst_part, ocf_core_id_t *core_id,
-                                                      uint64_t *core_line)
-{
-    ocf_cache_t cache = iter->cache;
-    struct ocf_part *part = iter->part;
-    struct ocf_lfu_list *bucket;
-    ocf_cache_line_t cline;
-
-    // Starting from the lowest frequency
-    do
-    {
-        // Acquire lock for writing into the current bucket
-        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, iter->current_freq);
-
-        bucket = ocf_lfu_get_list(part, iter->current_freq, iter->clean);
-
-        // Get the tail (LRU of the bucket)
-        cline = bucket->tail;
-
-        // If the list is empty / none of the cache lines can be evicted, move on to the higher freq bucket
-        while (cline != END_MARKER && !_lfu_iter_eviction_lock(iter, cline, core_id, core_line))
-        {
-            // Get the next oldest entry in the bucket
-            cline = ocf_metadata_get_lfu(cache, cline)->prev;
-        }
-
-        // If we can acquire an eviction candidate
-        if (cline != END_MARKER)
-        {
-            // Move to target partition at bucket 0
-            if (dst_part != part)
-            {
-                ocf_lfu_repart_locked(cache, cline, part, dst_part, 0);
-            }
-        }
-
-        // Release write lock
-        ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
-
-        if (cline == END_MARKER)
-        {
-            // Otherwise, increase the counter
-            iter->current_freq++;
-        }
-
-    } while (cline == END_MARKER && iter->current_freq < MAX_FREQ);
-
-    return cline;
-}
-
-/** Move cache line to another cache partition without changing frequency, wrapped with locks */
-void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
-                    struct ocf_part *src_part, struct ocf_part *dst_part)
-{
-    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-    ocf_lfu_repart_locked(cache, cline, src_part, dst_part, meta->freq);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
-}
-
 /** Move cache line to another cache partition
  * Caller must acquire write locks
  * Cache line's frequency might change depending on what is needed
@@ -431,6 +369,68 @@ static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
     ocf_metadata_set_partition_id(cache, cline, dst->id);
     env_atomic_dec(&src->runtime->curr_size);
     env_atomic_inc(&dst->runtime->curr_size);
+}
+
+/** Advance LFU eviction iterator, find next eviction candidate */
+static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
+                                                      struct ocf_part *dst_part, ocf_core_id_t *core_id,
+                                                      uint64_t *core_line)
+{
+    ocf_cache_t cache = iter->cache;
+    struct ocf_part *part = iter->part;
+    struct ocf_lfu_list *bucket;
+    ocf_cache_line_t cline;
+
+    // Starting from the lowest frequency
+    do
+    {
+        // Acquire lock for writing into the current bucket
+        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, iter->current_freq);
+
+        bucket = ocf_lfu_get_list(part, iter->current_freq, iter->clean);
+
+        // Get the tail (LRU of the bucket)
+        cline = bucket->tail;
+
+        // If the list is empty / none of the cache lines can be evicted, move on to the higher freq bucket
+        while (cline != END_MARKER && !_lfu_iter_eviction_lock(iter, cline, core_id, core_line))
+        {
+            // Get the next oldest entry in the bucket
+            cline = ocf_metadata_get_lfu(cache, cline)->prev;
+        }
+
+        // If we can acquire an eviction candidate
+        if (cline != END_MARKER)
+        {
+            // Move to target partition at bucket 0
+            if (dst_part != part)
+            {
+                ocf_lfu_repart_locked(cache, cline, part, dst_part, 0);
+            }
+        }
+
+        // Release write lock
+        ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
+
+        if (cline == END_MARKER)
+        {
+            // Otherwise, increase the counter
+            iter->current_freq++;
+        }
+
+    } while (cline == END_MARKER && iter->current_freq < MAX_FREQ);
+
+    return cline;
+}
+
+/** Move cache line to another cache partition without changing frequency, wrapped with locks */
+void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
+                    struct ocf_part *src_part, struct ocf_part *dst_part)
+{
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
+    ocf_lfu_repart_locked(cache, cline, src_part, dst_part, meta->freq);
+    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
 /**
