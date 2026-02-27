@@ -881,7 +881,7 @@ static void ocf_lfu_clean_end(void *private_data, int error)
             entries[i].cache_line);
     }
 
-    ocf_refcnt_dec(&ctx->counter);
+    env_refcnt_dec(&ctx->counter);
 }
 
 /** LFU cleaning */
@@ -903,13 +903,13 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 
     if (ocf_mngt_cache_is_locked(cache))
         return;
-    cnt = ocf_refcnt_inc(&ctx->counter);
+    cnt = env_refcnt_inc(&ctx->counter);
     if (!cnt)
         return;
 
     if (cnt > 1)
     {
-        ocf_refcnt_dec(&ctx->counter);
+        env_refcnt_dec(&ctx->counter);
         return;
     }
 
@@ -938,7 +938,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 
     if (i == 0)
     {
-        ocf_refcnt_dec(&ctx->counter);
+        env_refcnt_dec(&ctx->counter);
         return;
     }
 
