@@ -441,7 +441,6 @@ void ocf_lfu_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
     ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
     struct ocf_part *part = &cache->user_parts[part_id].part;
-    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
     ocf_lfu_repart(cache, cline, part, &cache->free);
 }
