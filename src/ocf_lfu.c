@@ -881,6 +881,7 @@ static void ocf_lfu_clean_end(void *private_data, int error)
             entries[i].cache_line);
     }
 
+    env_atomic_set(&ctx->cleaner_running, 0);
     env_refcnt_dec(&ctx->counter);
 }
 
@@ -897,22 +898,23 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
     struct flush_data *entries = ctx->entries;
     struct ocf_lfu_iter iter;
     unsigned freq;
-    int cnt;
     unsigned i;
     unsigned lock_idx;
 
     if (ocf_mngt_cache_is_locked(cache))
         return;
-    cnt = env_refcnt_inc(&ctx->counter);
-    if (!cnt)
-        return;
 
-    if (cnt > 1)
-    {
-        env_refcnt_dec(&ctx->counter);
-        return;
-    }
+    if (unlikely(!env_refcnt_inc(&ctx->counter))) {
+		/* cleaner disabled by management operation */
+		return;
+	}
 
+    if (env_atomic_cmpxchg(&ctx->cleaner_running, 0, 1) != 0) {
+		/* cleaning already running for this partition */
+		env_refcnt_dec(&ctx->counter);
+		return;
+	}
+    
     ctx->cache = cache;
     freq = io_queue->lru_idx++ % MAX_FREQ;
 
