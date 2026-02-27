@@ -375,7 +375,7 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
  * Caller must acquire write locks
  * Cache line's frequency might change depending on what is needed
  */
-void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
+static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
                            struct ocf_part *src, struct ocf_part *dst,
                            uint32_t dst_freq)
 {
