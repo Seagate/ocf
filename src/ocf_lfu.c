@@ -957,11 +957,16 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
 
     // Assert that cache line is currently not dirty
-    ENV_BUG_ON(metadata_test_dirty(cache, cline));
+    // ENV_BUG_ON(metadata_test_dirty(cache, cline));
+    if(!metadata_test_dirty(cache, cline)) {
+        pr_warn("Thread %d: cline %u already dirty\n", smp_processor_id(), cline);
+        goto unlock;
+    }
 
     remove_from_freq_bucket(meta->freq, cache, cline, true);
     add_to_freq_bucket(meta->freq, cache, cline, false);
 
+unlock:
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
@@ -974,10 +979,15 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
 
     // Assert that cache line is currently dirty
-    ENV_BUG_ON(!metadata_test_dirty(cache, cline));
+    // ENV_BUG_ON(!metadata_test_dirty(cache, cline));
+    if(!metadata_test_dirty(cache, cline)) {
+        pr_warn("Thread %d: cline %u already dirty\n", smp_processor_id(), cline);
+        goto unlock;
+    }
 
     remove_from_freq_bucket(meta->freq, cache, cline, false);
     add_to_freq_bucket(meta->freq, cache, cline, true);
-    
+
+unlock:
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
