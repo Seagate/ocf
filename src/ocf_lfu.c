@@ -953,15 +953,13 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
-    // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-
     // Assert that cache line is currently not dirty
     ENV_BUG_ON(metadata_test_dirty(cache, cline));
 
+    // QUESTION: Should we increment its frequency?
+    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
     remove_from_freq_bucket(meta->freq, cache, cline, true);
     add_to_freq_bucket(meta->freq, cache, cline, false);
-
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
@@ -970,14 +968,12 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
-    // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-
     // Assert that cache line is currently dirty
     ENV_BUG_ON(!metadata_test_dirty(cache, cline));
 
+    // QUESTION: Should we increment its frequency?
+    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
     remove_from_freq_bucket(meta->freq, cache, cline, false);
     add_to_freq_bucket(meta->freq, cache, cline, true);
-    
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
