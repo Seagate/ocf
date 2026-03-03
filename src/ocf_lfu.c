@@ -955,12 +955,6 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     // TODO: Make more efficient
     ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
 
-    // Test metadata validity
-    if(!metadata_test_valid(cache, cline)) {
-        ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
-        return;
-    }
-
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
     // QUESTION: Should we increment its frequency?
@@ -982,12 +976,6 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     // Change to lock all for now -> more expensive
     // TODO: Make more efficient
     ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
-
-    // Test metadata validity
-    if(!metadata_test_valid(cache, cline)) {
-        ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
-        return;
-    }
 
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
