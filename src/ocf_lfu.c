@@ -990,29 +990,56 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 /* Mark a cache line as dirty by moving it to the dirty list */
 void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
+    // Change to lock all for now -> more expensive
+    // TODO: Make more efficient
+    ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
+
+    // Test metadata validity
+    if(!metadata_test_valid(cache, cline)) {
+        ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
+        return;
+    }
+
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+
+    // QUESTION: Should we increment its frequency?
+    // ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
 
     // Assert that cache line is currently not dirty
     ENV_BUG_ON(metadata_test_dirty(cache, cline));
 
-    // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
     remove_from_freq_bucket(meta->freq, cache, cline, true);
     add_to_freq_bucket(meta->freq, cache, cline, false);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
+
+    ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
+    // ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
 /* Mark a cache line as clean by moving it to the clean list */
 void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
+    // Change to lock all for now -> more expensive
+    // TODO: Make more efficient
+    ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
+
+    // Test metadata validity
+    if(!metadata_test_valid(cache, cline)) {
+        ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
+        return;
+    }
+
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+
+    // QUESTION: Should we increment its frequency?
+    // ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
 
     // Assert that cache line is currently dirty
     ENV_BUG_ON(!metadata_test_dirty(cache, cline));
-
-    // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
+    
     remove_from_freq_bucket(meta->freq, cache, cline, false);
     add_to_freq_bucket(meta->freq, cache, cline, true);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
+
+    ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
+
+    // ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
