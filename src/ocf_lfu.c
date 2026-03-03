@@ -667,7 +667,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     ocf_cache_line_t cnt, cline;
     ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
     struct ocf_generator_bisect_state generator;
-    struct ocf_lfu_list *list, *local;
+    struct ocf_lfu_list *local;
     unsigned freq = shard_id;
     unsigned step = 0;
     uint32_t portion, offset;
@@ -681,9 +681,6 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     local = &context->locals[freq];
     _lfu_init(local);
 
-    // Get destination list (bucket 0 of freelist)
-    list = ocf_lfu_get_list(&cache->free, 0, true);
-
     cnt = 0;
     for (i = 0; i < portion; i++)
     {
@@ -693,19 +690,18 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
         cline = idx * shards_cnt + shard_id;
         if (cline >= entries)
             continue;
+            
 
         ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
+
+        struct ocf_lfu_meta *m = ocf_metadata_get_lfu(cache, cline);
+        m->freq = 0;
 
         // ocf_lfu_add(cache, cline);
         add_to_list(local, cache, cline);
 
         cnt++;
     }
-
-    // Join to destination list
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, 0);
-    lfu_global_concat_locked(list, cache, local);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, 0);
 
     env_atomic_add(cnt, &context->curr_size);
 
@@ -718,6 +714,19 @@ static void ocf_lfu_populate_finish(ocf_parallelize_t parallelize,
                                     void *priv, int error)
 {
     struct ocf_lfu_populate_context *context = priv;
+    
+    // Get destination list (bucket 0 of freelist)
+    ocf_cache_t cache = context->cache;
+    struct ocf_lfu_list *list = ocf_lfu_get_list(&cache->free, 0, true);
+
+    // Join to destination list
+    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, 0);
+
+    for (unsigned s = 0; s < OCF_NUM_LRU_LISTS; s++) {
+        lfu_global_concat_locked(list, cache, &context->locals[s]);
+    }
+    
+    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, 0);
 
     env_atomic_set(&context->cache->free.runtime->curr_size,
                    env_atomic_read(&context->curr_size));
