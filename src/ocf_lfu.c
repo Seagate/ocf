@@ -678,7 +678,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     ocf_generator_bisect_init(&generator, portion, offset);
 
     // Create local list
-    local = &context->locals[shard_id];
+    local = &context->locals[freq];
     _lfu_init(local);
 
     // Get destination list (bucket 0 of freelist)
