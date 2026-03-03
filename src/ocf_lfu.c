@@ -663,7 +663,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
 
         ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
 
-        ocf_lfu_add(cache, cline);
+        add_to_list(list, cache, cline);
 
         cnt++;
     }
