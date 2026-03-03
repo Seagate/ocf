@@ -627,35 +627,7 @@ struct ocf_lfu_populate_context
 
     ocf_lfu_populate_end_t cmpl;
     void *priv;
-
-    struct ocf_lfu_list locals[MAX_FREQ];
 };
-
-/* Concatenate a local ocf_lfu_list with a global one 
-* Must be called inside a lock
-*/
-static inline void lfu_global_concat_locked(struct ocf_lfu_list *global,
-                                     ocf_cache_t cache,
-                                     const struct ocf_lfu_list *local)
-{
-    if (local->head == END_MARKER)
-        return;
-
-    if (global->head == END_MARKER) {
-        global->head = local->head;
-        global->tail = local->tail;
-    } else {
-        struct ocf_lfu_meta *gt = ocf_metadata_get_lfu(cache, global->tail);
-        struct ocf_lfu_meta *lh = ocf_metadata_get_lfu(cache, local->head);
-
-        gt->next = local->head;
-        lh->prev = global->tail;
-
-        global->tail = local->tail;
-    }
-
-    global->num_nodes += local->num_nodes;
-}
 
 /** LFU Populate
  * Function called inside each worker shard */
@@ -667,7 +639,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     ocf_cache_line_t cnt, cline;
     ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
     struct ocf_generator_bisect_state generator;
-    struct ocf_lfu_list *list, *local;
+    struct ocf_lfu_list *list;
     unsigned freq = shard_id;
     unsigned step = 0;
     uint32_t portion, offset;
@@ -677,12 +649,7 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     offset = shard_id * portion / shards_cnt;
     ocf_generator_bisect_init(&generator, portion, offset);
 
-    // Create local list
-    local = &context->locals[shard_id];
-    _lfu_init(local);
-
-    // Get destination list (bucket 0 of freelist)
-    list = ocf_lfu_get_list(&cache->free, 0, true);
+    list = ocf_lfu_get_list(&cache->free, freq, true);
 
     cnt = 0;
     for (i = 0; i < portion; i++)
@@ -696,16 +663,10 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
 
         ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
 
-        // ocf_lfu_add(cache, cline);
-        add_to_list(local, cache, cline);
+        ocf_lfu_add(cache, cline);
 
         cnt++;
     }
-
-    // Join to destination list
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, 0);
-    lfu_global_concat_locked(list, cache, local);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, 0);
 
     env_atomic_add(cnt, &context->curr_size);
 
