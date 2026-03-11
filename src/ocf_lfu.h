@@ -11,6 +11,7 @@ struct ocf_lfu_meta {
     uint32_t freq;          // Access frequency counter
     uint32_t prev;          // For doubly linked list in freq bucket
     uint32_t next;
+    bool clean;
 } __attribute__((packed));
 
 struct ocf_lfu_list {

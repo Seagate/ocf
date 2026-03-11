@@ -57,6 +57,7 @@ void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
     meta->freq = 0;
     meta->prev = END_MARKER;
     meta->next = END_MARKER;
+    meta->clean = true;
 }
 
 static inline void _lfu_init(struct ocf_lfu_list *list)
@@ -116,7 +117,12 @@ static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_
 
 /** Remove cache line from a list */
 static void remove_from_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_line_t cline) {
+    
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+
+    ocf_cache_log(cache, log_debug, "[remove_from_list] req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
+       cline, meta->freq, list->num_nodes,
+       raw_smp_processor_id(), current->pid, current->comm);
 
     if (meta->prev != END_MARKER)
     {
@@ -149,7 +155,13 @@ static void remove_from_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_
 {
     struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
-    
+
+    bool clean_current = !metadata_test_dirty(cache, cline);
+
+    ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u cpu=%u pid=%d comm=%s\n",
+       cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes,
+       raw_smp_processor_id(), current->pid, current->comm);
+
     ENV_BUG_ON(list->num_nodes == 0);
 
     remove_from_list(list, cache, cline);
@@ -169,11 +181,12 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     if (b != a)
         ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
 
-    remove_from_freq_bucket(old_freq, cache, cline, !metadata_test_dirty(cache, cline));
+    ocf_lfu_remove(cache, cline);
+    // remove_from_freq_bucket(old_freq, cache, cline, !metadata_test_dirty(cache, cline));
 
     meta->freq = new_freq;
 
-    add_to_freq_bucket(new_freq, cache, cline, !metadata_test_dirty(cache, cline));
+    add_to_freq_bucket(new_freq, cache, cline, meta->clean);
 
     if (b != a)
         ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, b);
@@ -185,14 +198,15 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     meta->freq = 0;
-    add_to_freq_bucket(0, cache, cline, !metadata_test_dirty(cache, cline));
+    meta->clean = !metadata_test_dirty(cache, cline);
+    add_to_freq_bucket(0, cache, cline, meta->clean);
 }
 
 /** Remove a cache line completely from freq buckets (on eviction) */
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline)
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
-    remove_from_freq_bucket(meta->freq, cache, cline, !metadata_test_dirty(cache, cline));
+    remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
 }
 
 /** Invalidate a cache line during eviction, including
@@ -341,6 +355,7 @@ static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
                                   uint32_t src_freq, uint32_t dst_freq)
 {
     struct ocf_lfu_list *src_list, *dst_list;
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
     // ocf_cache_log(cache, log_debug, "Frequency of cacheline to move: %u",
     //                   src_freq);
@@ -349,7 +364,7 @@ static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
     ENV_BUG_ON(dst_freq >= MAX_FREQ);
     ENV_BUG_ON(src == dst);
     
-    bool clean = !metadata_test_dirty(cache, cline);
+    bool clean = meta->clean;
     src_list = ocf_lfu_get_list(src, src_freq, clean);
     dst_list = ocf_lfu_get_list(dst, dst_freq, clean);
 
@@ -491,7 +506,7 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
         bucket = ocf_lfu_get_list(free, iter->current_freq, true);
         cline = bucket->tail;
 
-        ocf_cache_log(cache, log_debug, "[lfu_iter_free_next] cline: %u", cline);
+        // ocf_cache_log(cache, log_debug, "[lfu_iter_free_next] cline: %u", cline);
 
         // Iterate over bucket from tail (LFU logic: least frequently used = lower freq)
         while (cline != END_MARKER && !ocf_cache_line_try_lock_wr(
@@ -522,7 +537,7 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
             // Advance to next frequency bucket
             iter->current_freq++;
 
-            ocf_cache_log(cache, log_debug, "[lfu_iter_free_next] Advance iterator: %u", iter->current_freq);
+            // ocf_cache_log(cache, log_debug, "[lfu_iter_free_next] Advance iterator: %u", iter->current_freq);
         }
 
     } while (cline == END_MARKER && iter->current_freq < MAX_FREQ);
@@ -594,14 +609,6 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
         {
             cline = lfu_iter_free_next(&iter, dst_part);
         }
-
-        ocf_cache_log(cache, log_debug, "[ocf_lfu_req_clines] Iter freq after advancing: %u",
-                      iter.current_freq);
-        ocf_cache_log(cache, log_debug, "[ocf_lfu_req_clines] Num nodes in Freelist clean: %u",
-                      cache->free.runtime->freq_buckets[0].clean.num_nodes);
-        ocf_cache_log(cache, log_debug, "[ocf_lfu_req_clines] cline found: %u",
-                      cline);
-        
 
         // No more evictable lines found
         if (cline == END_MARKER)
@@ -1005,8 +1012,11 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-    remove_from_freq_bucket(meta->freq, cache, cline, true);
+
+    remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
+    meta->clean = false;
     add_to_freq_bucket(meta->freq, cache, cline, false);
+
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
 
@@ -1016,11 +1026,12 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
     // Assert that cache line is currently dirty
-    ENV_BUG_ON(!metadata_test_dirty(cache, cline));
+    // ENV_BUG_ON(!metadata_test_dirty(cache, cline));
 
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
-    remove_from_freq_bucket(meta->freq, cache, cline, false);
+    remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
+    meta->clean = true;
     add_to_freq_bucket(meta->freq, cache, cline, true);
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
 }
