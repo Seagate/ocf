@@ -90,9 +90,9 @@ static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
-    ocf_cache_log(cache, log_debug, "[add_to_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, list->num_nodes,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, list->num_nodes,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     meta->prev = END_MARKER;
     meta->next = list->head;
@@ -109,9 +109,9 @@ static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_
 
     list->num_nodes++;
 
-    ocf_cache_log(cache, log_debug, "[add_to_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, list->num_nodes,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, list->num_nodes,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 }
 
 /** Add cache line to frequency bucket list head */
@@ -122,9 +122,9 @@ static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_
 
     bool clean_current = !metadata_test_dirty(cache, cline);
 
-    ocf_cache_log(cache, log_debug, "[add_to_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
-                  cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     add_to_list(list, cache, cline);
 }
@@ -147,9 +147,9 @@ static void remove_from_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_c
     else
         ENV_BUG_ON(ocf_metadata_get_lfu(cache, meta->next)->prev != cline);
 
-    ocf_cache_log(cache, log_debug, "[remove_from_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, list->num_nodes,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, list->num_nodes,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     if (meta->prev != END_MARKER)
     {
@@ -176,9 +176,9 @@ static void remove_from_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_c
 
     list->num_nodes--;
 
-    ocf_cache_log(cache, log_debug, "[remove_from_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, list->num_nodes,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, list->num_nodes,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 }
 
 /** Remove cache line from its current freq bucket */
@@ -189,9 +189,9 @@ static void remove_from_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_
 
     bool clean_current = !metadata_test_dirty(cache, cline);
 
-    ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
-                  cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     ENV_BUG_ON(list->num_nodes == 0);
 
@@ -212,25 +212,25 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     if (b != a)
         ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
 
-    ocf_cache_log(cache, log_debug,
-                  "[ocf_lfu_increment] enter | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, meta->clean,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug,
+    //               "[ocf_lfu_increment] enter | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, meta->clean,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     ocf_lfu_remove(cache, cline);
     // remove_from_freq_bucket(old_freq, cache, cline, !metadata_test_dirty(cache, cline));
-    ocf_cache_log(cache, log_debug,
-                  "[ocf_lfu_increment] after remove | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, meta->clean,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug,
+    //               "[ocf_lfu_increment] after remove | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, meta->clean,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     add_to_freq_bucket(new_freq, cache, cline, meta->clean);
     meta->freq = new_freq;
 
-    ocf_cache_log(cache, log_debug,
-                  "[ocf_lfu_increment] after add to new bucket | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
-                  cline, meta->freq, meta->clean,
-                  raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug,
+    //               "[ocf_lfu_increment] after add to new bucket | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
+    //               cline, meta->freq, meta->clean,
+    //               raw_smp_processor_id(), current->pid, current->comm);
 
     if (b != a)
         ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, b);
@@ -648,8 +648,8 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
     // Try to assign 'cline_no' cache lines
     while (i < cline_no)
     {
-        ocf_cache_log(cache, log_debug, "[ocf_lfu_req_clines] Iter freq before advancing: %u",
-                      iter.current_freq);
+        // ocf_cache_log(cache, log_debug, "[ocf_lfu_req_clines] Iter freq before advancing: %u",
+        //               iter.current_freq);
 
         // Select next candidate cache line depending on source partition
         if (src_part->id != PARTITION_FREELIST)
