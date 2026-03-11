@@ -54,6 +54,9 @@ lru_err:
 	while (lru_iter--)
 		env_spinlock_destroy(&metadata_lock->lru[lru_iter]);
 
+	while(lfu_iter--)
+		env_rwlock_destroy(&metadata_lock->lfu[lfu_iter]);
+
 	return err;
 }
 
