@@ -120,7 +120,7 @@ static void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_
     struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
 
-    bool clean_current = !metadata_test_dirty(cache, cline);
+    // bool clean_current = !metadata_test_dirty(cache, cline);
 
     // ocf_cache_log(cache, log_debug, "[add_to_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
     //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
@@ -187,7 +187,7 @@ static void remove_from_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_
     struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, freq, clean);
 
-    bool clean_current = !metadata_test_dirty(cache, cline);
+    // bool clean_current = !metadata_test_dirty(cache, cline);
 
     // ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
     //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
@@ -797,6 +797,8 @@ void ocf_lfu_populate(ocf_cache_t cache,
     ocf_parallelize_t parallelize;
     int result;
 
+    // Potential problem: if we make a higher MAX_FREQ, should we still just cap to 32 parallel threads?
+    // Because it might eat up too much memory to make one thread for every bucket
     result = ocf_parallelize_create(&parallelize, cache, MAX_FREQ,
                                     sizeof(*context), ocf_lfu_populate_handle,
                                     ocf_lfu_populate_finish, false);
