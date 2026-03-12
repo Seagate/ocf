@@ -30,6 +30,7 @@ struct OCF_LFU_DEBUG_PROFILE_stats
 {
     atomic64_t inc_calls;
     atomic64_t inc_sat_calls;
+    atomic64_t inc_sat_skipped_calls;
     atomic64_t inc_bucket_change_calls;
     atomic64_t inc_total_ns;
     atomic64_t inc_lock_wait_ns;
@@ -54,6 +55,8 @@ static void ocf_lfu_prof_dump(const char *reason)
 {
     u64 inc_calls = atomic64_read(&ocf_lfu_prof_stats.inc_calls);
     u64 inc_sat_calls = atomic64_read(&ocf_lfu_prof_stats.inc_sat_calls);
+    u64 inc_sat_skipped_calls =
+        atomic64_read(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
     u64 inc_bucket_change_calls =
         atomic64_read(&ocf_lfu_prof_stats.inc_bucket_change_calls);
     u64 inc_total_ns = atomic64_read(&ocf_lfu_prof_stats.inc_total_ns);
@@ -81,10 +84,11 @@ static void ocf_lfu_prof_dump(const char *reason)
         inc_calls ? div64_u64(inc_body_ns, inc_calls) : 0;
     u64 avg_req_ns = req_calls ? div64_u64(req_total_ns, req_calls) : 0;
 
-    pr_info("lfu-prof[%s]: inc=%llu sat=%llu bucket_change=%llu avg_inc_ns=%llu avg_lock_wait_ns=%llu avg_body_ns=%llu\n",
+    pr_info("lfu-prof[%s]: inc=%llu sat=%llu sat_skipped=%llu bucket_change=%llu avg_inc_ns=%llu avg_lock_wait_ns=%llu avg_body_ns=%llu\n",
             reason,
             (unsigned long long)inc_calls,
             (unsigned long long)inc_sat_calls,
+            (unsigned long long)inc_sat_skipped_calls,
             (unsigned long long)inc_bucket_change_calls,
             (unsigned long long)avg_inc_ns,
             (unsigned long long)avg_inc_lock_wait_ns,
@@ -309,10 +313,8 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t old_freq = meta->freq;
-    uint32_t new_freq = (old_freq < MAX_FREQ - 1) ? old_freq + 1 : old_freq;
-
-    uint32_t a = min(old_freq, new_freq);
-    uint32_t b = MAX(old_freq, new_freq);
+    uint32_t new_freq;
+    uint32_t a, b;
 
 #if OCF_LFU_DEBUG_PROFILE
     u64 prof_call_no;
@@ -321,10 +323,29 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 
 #if OCF_LFU_DEBUG_PROFILE
     prof_call_no = (u64)atomic64_inc_return(&ocf_lfu_prof_stats.inc_calls);
-    if (old_freq == new_freq)
+#endif
+
+    /** 
+     * Skip if it already reaches MAX_FREQ
+     * Removes the LRU tiebreaking on the MAX_FREQ bucket but also removes
+     * the cost of relinking most frequently used lines
+     * */ 
+    if (unlikely(old_freq >= MAX_FREQ - 1)) {
+#if OCF_LFU_DEBUG_PROFILE
         atomic64_inc(&ocf_lfu_prof_stats.inc_sat_calls);
-    else
-        atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
+        atomic64_inc(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
+        ocf_lfu_prof_maybe_dump_inc(prof_call_no);
+#endif
+        return;
+    }
+
+    new_freq = (old_freq < MAX_FREQ - 1) ? old_freq + 1 : old_freq;
+
+    a = old_freq;
+    b = new_freq;
+
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
     t0 = ktime_get_ns();
 #endif
 
