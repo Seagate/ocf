@@ -13,7 +13,113 @@
 #include "ocf_request.h"
 #include "engine/engine_common.h"
 
+// DEBUG PROFILING
+#include <linux/atomic.h>
+#include <linux/ktime.h>
+#include <linux/math64.h>
 #include <linux/printk.h>
+
+#ifndef OCF_LFU_DEBUG_PROFILE
+#define OCF_LFU_DEBUG_PROFILE 1
+#endif
+
+#if OCF_LFU_DEBUG_PROFILE
+#define OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC (1ULL << 17) /* 131072 */
+#define OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_REQ 64ULL
+struct OCF_LFU_DEBUG_PROFILE_stats
+{
+    atomic64_t inc_calls;
+    atomic64_t inc_sat_calls;
+    atomic64_t inc_bucket_change_calls;
+    atomic64_t inc_total_ns;
+    atomic64_t inc_lock_wait_ns;
+    atomic64_t inc_body_ns;
+
+    atomic64_t req_calls;
+    atomic64_t req_clines_requested;
+    atomic64_t req_clines_assigned;
+    atomic64_t req_total_ns;
+
+    atomic64_t dirty_calls;
+    atomic64_t clean_calls;
+    atomic64_t add_calls;
+    atomic64_t remove_calls;
+    atomic64_t repart_calls;
+    atomic64_t rm_cline_calls;
+};
+
+static struct OCF_LFU_DEBUG_PROFILE_stats ocf_lfu_prof_stats;
+
+static void ocf_lfu_prof_dump(const char *reason)
+{
+    u64 inc_calls = atomic64_read(&ocf_lfu_prof_stats.inc_calls);
+    u64 inc_sat_calls = atomic64_read(&ocf_lfu_prof_stats.inc_sat_calls);
+    u64 inc_bucket_change_calls =
+        atomic64_read(&ocf_lfu_prof_stats.inc_bucket_change_calls);
+    u64 inc_total_ns = atomic64_read(&ocf_lfu_prof_stats.inc_total_ns);
+    u64 inc_lock_wait_ns =
+        atomic64_read(&ocf_lfu_prof_stats.inc_lock_wait_ns);
+    u64 inc_body_ns = atomic64_read(&ocf_lfu_prof_stats.inc_body_ns);
+
+    u64 req_calls = atomic64_read(&ocf_lfu_prof_stats.req_calls);
+    u64 req_clines_requested =
+        atomic64_read(&ocf_lfu_prof_stats.req_clines_requested);
+    u64 req_clines_assigned =
+        atomic64_read(&ocf_lfu_prof_stats.req_clines_assigned);
+    u64 req_total_ns = atomic64_read(&ocf_lfu_prof_stats.req_total_ns);
+    u64 dirty_calls = atomic64_read(&ocf_lfu_prof_stats.dirty_calls);
+    u64 clean_calls = atomic64_read(&ocf_lfu_prof_stats.clean_calls);
+    u64 add_calls = atomic64_read(&ocf_lfu_prof_stats.add_calls);
+    u64 remove_calls = atomic64_read(&ocf_lfu_prof_stats.remove_calls);
+    u64 repart_calls = atomic64_read(&ocf_lfu_prof_stats.repart_calls);
+    u64 rm_cline_calls = atomic64_read(&ocf_lfu_prof_stats.rm_cline_calls);
+
+    u64 avg_inc_ns = inc_calls ? div64_u64(inc_total_ns, inc_calls) : 0;
+    u64 avg_inc_lock_wait_ns =
+        inc_calls ? div64_u64(inc_lock_wait_ns, inc_calls) : 0;
+    u64 avg_inc_body_ns =
+        inc_calls ? div64_u64(inc_body_ns, inc_calls) : 0;
+    u64 avg_req_ns = req_calls ? div64_u64(req_total_ns, req_calls) : 0;
+
+    pr_info("lfu-prof[%s]: inc=%llu sat=%llu bucket_change=%llu avg_inc_ns=%llu avg_lock_wait_ns=%llu avg_body_ns=%llu\n",
+            reason,
+            (unsigned long long)inc_calls,
+            (unsigned long long)inc_sat_calls,
+            (unsigned long long)inc_bucket_change_calls,
+            (unsigned long long)avg_inc_ns,
+            (unsigned long long)avg_inc_lock_wait_ns,
+            (unsigned long long)avg_inc_body_ns);
+
+    pr_info("lfu-prof[%s]: req=%llu req_clines=%llu/%llu avg_req_ns=%llu dirty=%llu clean=%llu add=%llu remove=%llu repart=%llu rm_cline=%llu\n",
+            reason,
+            (unsigned long long)req_calls,
+            (unsigned long long)req_clines_assigned,
+            (unsigned long long)req_clines_requested,
+            (unsigned long long)avg_req_ns,
+            (unsigned long long)dirty_calls,
+            (unsigned long long)clean_calls,
+            (unsigned long long)add_calls,
+            (unsigned long long)remove_calls,
+            (unsigned long long)repart_calls,
+            (unsigned long long)rm_cline_calls);
+}
+
+static inline void ocf_lfu_prof_maybe_dump_inc(u64 inc_call_no)
+{
+    if ((inc_call_no & (OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC - 1)) == 0)
+        ocf_lfu_prof_dump("inc");
+}
+
+static inline void ocf_lfu_prof_maybe_dump_req(u64 req_call_no)
+{
+    if (req_call_no && (req_call_no % OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_REQ) == 0)
+        ocf_lfu_prof_dump("req");
+}
+#else
+static inline void ocf_lfu_prof_dump(const char *reason) {}
+static inline void ocf_lfu_prof_maybe_dump_inc(u64 inc_call_no) {}
+static inline void ocf_lfu_prof_maybe_dump_req(u64 req_call_no) {}
+#endif
 
 static const uint32_t END_MARKER = (uint32_t)-1;
 
@@ -208,9 +314,27 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     uint32_t a = min(old_freq, new_freq);
     uint32_t b = MAX(old_freq, new_freq);
 
+#if OCF_LFU_DEBUG_PROFILE
+    u64 prof_call_no;
+    u64 t0, t1, t2, t3;
+#endif
+
+#if OCF_LFU_DEBUG_PROFILE
+    prof_call_no = (u64)atomic64_inc_return(&ocf_lfu_prof_stats.inc_calls);
+    if (old_freq == new_freq)
+        atomic64_inc(&ocf_lfu_prof_stats.inc_sat_calls);
+    else
+        atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
+    t0 = ktime_get_ns();
+#endif
+
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, a);
     if (b != a)
         ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
+
+#if OCF_LFU_DEBUG_PROFILE
+    t1 = ktime_get_ns();
+#endif
 
     // ocf_cache_log(cache, log_debug,
     //               "[ocf_lfu_increment] enter | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
@@ -227,6 +351,10 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     add_to_freq_bucket(new_freq, cache, cline, meta->clean);
     meta->freq = new_freq;
 
+#if OCF_LFU_DEBUG_PROFILE
+    t2 = ktime_get_ns();
+#endif
+
     // ocf_cache_log(cache, log_debug,
     //               "[ocf_lfu_increment] after add to new bucket | cline=%u meta_freq=%u clean=%u cpu=%u pid=%d comm=%s\n",
     //               cline, meta->freq, meta->clean,
@@ -235,11 +363,22 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     if (b != a)
         ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, b);
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, a);
+
+#if OCF_LFU_DEBUG_PROFILE
+    t3 = ktime_get_ns();
+    atomic64_add(t3 - t0, &ocf_lfu_prof_stats.inc_total_ns);
+    atomic64_add(t1 - t0, &ocf_lfu_prof_stats.inc_lock_wait_ns);
+    atomic64_add(t2 - t1, &ocf_lfu_prof_stats.inc_body_ns);
+    ocf_lfu_prof_maybe_dump_inc(prof_call_no);
+#endif
 }
 
 /** Add a new cache line to freq bucket 0 on insertion */
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.add_calls);
+#endif
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     meta->freq = 0;
     meta->clean = !metadata_test_dirty(cache, cline);
@@ -249,6 +388,9 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 /** Remove a cache line completely from freq buckets (on eviction) */
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline)
 {
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.remove_calls);
+#endif
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
 }
@@ -500,6 +642,10 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t freq = meta->freq;
 
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.repart_calls);
+#endif
+
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, freq);
 
     /* revalidate after taking lock */
@@ -626,9 +772,20 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
     unsigned req_idx = 0;
     struct ocf_part *dst_part;
 
+#if OCF_LFU_DEBUG_PROFILE
+    u64 req_call_no;
+    u64 req_t0;
+#endif
+
     // Return early if nothing is requested
     if (cline_no == 0)
         return 0;
+
+#if OCF_LFU_DEBUG_PROFILE
+    req_call_no = (u64)atomic64_inc_return(&ocf_lfu_prof_stats.req_calls);
+    atomic64_add(cline_no, &ocf_lfu_prof_stats.req_clines_requested);
+    req_t0 = ktime_get_ns();
+#endif
 
     // Safety check: ensure request has enough unmapped lines for assignment
     if (unlikely(ocf_engine_unmapped_count(req) < cline_no))
@@ -709,6 +866,12 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
         // Consistency check: number of cachelines to evict have to match space in the request
         ENV_BUG_ON(req_idx == req->core_line_count && i != cline_no);
     }
+
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_add(i, &ocf_lfu_prof_stats.req_clines_assigned);
+    atomic64_add(ktime_get_ns() - req_t0, &ocf_lfu_prof_stats.req_total_ns);
+    ocf_lfu_prof_maybe_dump_req(req_call_no);
+#endif
 
     // Return the number of cache lines actually assigned
     return i;
@@ -1061,6 +1224,10 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     ENV_BUG_ON(meta->freq >= MAX_FREQ);
 
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.dirty_calls);
+#endif
+
     // Assert that cache line is currently not dirty
     // ENV_BUG_ON(metadata_test_dirty(cache, cline));
 
@@ -1078,6 +1245,10 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+
+#if OCF_LFU_DEBUG_PROFILE
+    atomic64_inc(&ocf_lfu_prof_stats.clean_calls);
+#endif
 
     // Assert that cache line is currently dirty
     // ENV_BUG_ON(!metadata_test_dirty(cache, cline));
