@@ -14,115 +14,137 @@
 #include "engine/engine_common.h"
 
 // DEBUG PROFILING
-#include <linux/atomic.h>
-#include <linux/ktime.h>
-#include <linux/math64.h>
-#include <linux/printk.h>
-
 #ifndef OCF_LFU_DEBUG_PROFILE
 #define OCF_LFU_DEBUG_PROFILE 1
 #endif
 
 #if OCF_LFU_DEBUG_PROFILE
-#define OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC (1ULL << 17) /* 131072 */
+#define OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC (1ULL << 17)
 #define OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_REQ 64ULL
-struct OCF_LFU_DEBUG_PROFILE_stats
-{
-    atomic64_t inc_calls;
-    atomic64_t inc_sat_calls;
-    atomic64_t inc_sat_skipped_calls;
-    atomic64_t inc_bucket_change_calls;
-    atomic64_t inc_total_ns;
-    atomic64_t inc_lock_wait_ns;
-    atomic64_t inc_body_ns;
 
-    atomic64_t req_calls;
-    atomic64_t req_clines_requested;
-    atomic64_t req_clines_assigned;
-    atomic64_t req_total_ns;
+struct ocf_lfu_debug_profile_stats {
+	env_atomic64 inc_calls;
+	env_atomic64 inc_sat_calls;
+	env_atomic64 inc_sat_skipped_calls;
+	env_atomic64 inc_bucket_change_calls;
+	env_atomic64 inc_total_ns;
+	env_atomic64 inc_lock_wait_ns;
+	env_atomic64 inc_body_ns;
 
-    atomic64_t dirty_calls;
-    atomic64_t clean_calls;
-    atomic64_t add_calls;
-    atomic64_t remove_calls;
-    atomic64_t repart_calls;
-    atomic64_t rm_cline_calls;
+	env_atomic64 req_calls;
+	env_atomic64 req_clines_requested;
+	env_atomic64 req_clines_assigned;
+	env_atomic64 req_total_ns;
+
+	env_atomic64 dirty_calls;
+	env_atomic64 clean_calls;
+	env_atomic64 add_calls;
+	env_atomic64 remove_calls;
+	env_atomic64 repart_calls;
+	env_atomic64 rm_cline_calls;
 };
 
-static struct OCF_LFU_DEBUG_PROFILE_stats ocf_lfu_prof_stats;
+static struct ocf_lfu_debug_profile_stats ocf_lfu_prof_stats;
 
-static void ocf_lfu_prof_dump(const char *reason)
+static inline u64 ocf_lfu_prof_now_ns(void)
 {
-    u64 inc_calls = atomic64_read(&ocf_lfu_prof_stats.inc_calls);
-    u64 inc_sat_calls = atomic64_read(&ocf_lfu_prof_stats.inc_sat_calls);
-    u64 inc_sat_skipped_calls =
-        atomic64_read(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
-    u64 inc_bucket_change_calls =
-        atomic64_read(&ocf_lfu_prof_stats.inc_bucket_change_calls);
-    u64 inc_total_ns = atomic64_read(&ocf_lfu_prof_stats.inc_total_ns);
-    u64 inc_lock_wait_ns =
-        atomic64_read(&ocf_lfu_prof_stats.inc_lock_wait_ns);
-    u64 inc_body_ns = atomic64_read(&ocf_lfu_prof_stats.inc_body_ns);
-
-    u64 req_calls = atomic64_read(&ocf_lfu_prof_stats.req_calls);
-    u64 req_clines_requested =
-        atomic64_read(&ocf_lfu_prof_stats.req_clines_requested);
-    u64 req_clines_assigned =
-        atomic64_read(&ocf_lfu_prof_stats.req_clines_assigned);
-    u64 req_total_ns = atomic64_read(&ocf_lfu_prof_stats.req_total_ns);
-    u64 dirty_calls = atomic64_read(&ocf_lfu_prof_stats.dirty_calls);
-    u64 clean_calls = atomic64_read(&ocf_lfu_prof_stats.clean_calls);
-    u64 add_calls = atomic64_read(&ocf_lfu_prof_stats.add_calls);
-    u64 remove_calls = atomic64_read(&ocf_lfu_prof_stats.remove_calls);
-    u64 repart_calls = atomic64_read(&ocf_lfu_prof_stats.repart_calls);
-    u64 rm_cline_calls = atomic64_read(&ocf_lfu_prof_stats.rm_cline_calls);
-
-    u64 avg_inc_ns = inc_calls ? div64_u64(inc_total_ns, inc_calls) : 0;
-    u64 avg_inc_lock_wait_ns =
-        inc_calls ? div64_u64(inc_lock_wait_ns, inc_calls) : 0;
-    u64 avg_inc_body_ns =
-        inc_calls ? div64_u64(inc_body_ns, inc_calls) : 0;
-    u64 avg_req_ns = req_calls ? div64_u64(req_total_ns, req_calls) : 0;
-
-    pr_info("lfu-prof[%s]: inc=%llu sat=%llu sat_skipped=%llu bucket_change=%llu avg_inc_ns=%llu avg_lock_wait_ns=%llu avg_body_ns=%llu\n",
-            reason,
-            (unsigned long long)inc_calls,
-            (unsigned long long)inc_sat_calls,
-            (unsigned long long)inc_sat_skipped_calls,
-            (unsigned long long)inc_bucket_change_calls,
-            (unsigned long long)avg_inc_ns,
-            (unsigned long long)avg_inc_lock_wait_ns,
-            (unsigned long long)avg_inc_body_ns);
-
-    pr_info("lfu-prof[%s]: req=%llu req_clines=%llu/%llu avg_req_ns=%llu dirty=%llu clean=%llu add=%llu remove=%llu repart=%llu rm_cline=%llu\n",
-            reason,
-            (unsigned long long)req_calls,
-            (unsigned long long)req_clines_assigned,
-            (unsigned long long)req_clines_requested,
-            (unsigned long long)avg_req_ns,
-            (unsigned long long)dirty_calls,
-            (unsigned long long)clean_calls,
-            (unsigned long long)add_calls,
-            (unsigned long long)remove_calls,
-            (unsigned long long)repart_calls,
-            (unsigned long long)rm_cline_calls);
+	/* both Linux env and POSIX env expose this */
+	return env_get_tick_count();
 }
 
-static inline void ocf_lfu_prof_maybe_dump_inc(u64 inc_call_no)
+static inline u64 ocf_lfu_prof_delta_ns(u64 start_ns, u64 end_ns)
 {
-    if ((inc_call_no & (OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC - 1)) == 0)
-        ocf_lfu_prof_dump("inc");
+	return env_ticks_to_nsecs(end_ns - start_ns);
 }
 
-static inline void ocf_lfu_prof_maybe_dump_req(u64 req_call_no)
+static inline u64 ocf_lfu_prof_avg(u64 total, u64 cnt)
 {
-    if (req_call_no && (req_call_no % OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_REQ) == 0)
-        ocf_lfu_prof_dump("req");
+	return cnt ? (total / cnt) : 0;
+}
+
+static void ocf_lfu_prof_dump(ocf_cache_t cache, const char *reason)
+{
+	u64 inc_calls = env_atomic64_read(&ocf_lfu_prof_stats.inc_calls);
+	u64 inc_sat_calls = env_atomic64_read(&ocf_lfu_prof_stats.inc_sat_calls);
+	u64 inc_sat_skipped_calls =
+		env_atomic64_read(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
+	u64 inc_bucket_change_calls =
+		env_atomic64_read(&ocf_lfu_prof_stats.inc_bucket_change_calls);
+	u64 inc_total_ns = env_atomic64_read(&ocf_lfu_prof_stats.inc_total_ns);
+	u64 inc_lock_wait_ns =
+		env_atomic64_read(&ocf_lfu_prof_stats.inc_lock_wait_ns);
+	u64 inc_body_ns = env_atomic64_read(&ocf_lfu_prof_stats.inc_body_ns);
+
+	u64 req_calls = env_atomic64_read(&ocf_lfu_prof_stats.req_calls);
+	u64 req_clines_requested =
+		env_atomic64_read(&ocf_lfu_prof_stats.req_clines_requested);
+	u64 req_clines_assigned =
+		env_atomic64_read(&ocf_lfu_prof_stats.req_clines_assigned);
+	u64 req_total_ns = env_atomic64_read(&ocf_lfu_prof_stats.req_total_ns);
+
+	u64 dirty_calls = env_atomic64_read(&ocf_lfu_prof_stats.dirty_calls);
+	u64 clean_calls = env_atomic64_read(&ocf_lfu_prof_stats.clean_calls);
+	u64 add_calls = env_atomic64_read(&ocf_lfu_prof_stats.add_calls);
+	u64 remove_calls = env_atomic64_read(&ocf_lfu_prof_stats.remove_calls);
+	u64 repart_calls = env_atomic64_read(&ocf_lfu_prof_stats.repart_calls);
+	u64 rm_cline_calls = env_atomic64_read(&ocf_lfu_prof_stats.rm_cline_calls);
+
+	u64 avg_inc_ns = ocf_lfu_prof_avg(inc_total_ns, inc_calls);
+	u64 avg_inc_lock_wait_ns = ocf_lfu_prof_avg(inc_lock_wait_ns, inc_calls);
+	u64 avg_inc_body_ns = ocf_lfu_prof_avg(inc_body_ns, inc_calls);
+	u64 avg_req_ns = ocf_lfu_prof_avg(req_total_ns, req_calls);
+
+	ocf_cache_log(cache, log_info,
+		"lfu-prof[%s]: inc=%" ENV_PRIu64 " sat=%" ENV_PRIu64
+		" sat_skipped=%" ENV_PRIu64 " bucket_change=%" ENV_PRIu64
+		" avg_inc_ns=%" ENV_PRIu64 " avg_lock_wait_ns=%" ENV_PRIu64
+		" avg_body_ns=%" ENV_PRIu64 "\n",
+		reason,
+		inc_calls,
+		inc_sat_calls,
+		inc_sat_skipped_calls,
+		inc_bucket_change_calls,
+		avg_inc_ns,
+		avg_inc_lock_wait_ns,
+		avg_inc_body_ns);
+
+	ocf_cache_log(cache, log_info,
+		"lfu-prof[%s]: req=%" ENV_PRIu64 " req_clines=%" ENV_PRIu64
+		"/%" ENV_PRIu64 " avg_req_ns=%" ENV_PRIu64
+		" dirty=%" ENV_PRIu64 " clean=%" ENV_PRIu64
+		" add=%" ENV_PRIu64 " remove=%" ENV_PRIu64
+		" repart=%" ENV_PRIu64 " rm_cline=%" ENV_PRIu64 "\n",
+		reason,
+		req_calls,
+		req_clines_assigned,
+		req_clines_requested,
+		avg_req_ns,
+		dirty_calls,
+		clean_calls,
+		add_calls,
+		remove_calls,
+		repart_calls,
+		rm_cline_calls);
+}
+
+static inline void ocf_lfu_prof_maybe_dump_inc(ocf_cache_t cache, u64 inc_call_no)
+{
+	if ((inc_call_no & (OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_INC - 1)) == 0)
+		ocf_lfu_prof_dump(cache, "inc");
+}
+
+static inline void ocf_lfu_prof_maybe_dump_req(ocf_cache_t cache, u64 req_call_no)
+{
+	if (req_call_no &&
+	    (req_call_no % OCF_LFU_DEBUG_PROFILE_DUMP_EVERY_REQ) == 0)
+		ocf_lfu_prof_dump(cache, "req");
 }
 #else
-static inline void ocf_lfu_prof_dump(const char *reason) {}
-static inline void ocf_lfu_prof_maybe_dump_inc(u64 inc_call_no) {}
-static inline void ocf_lfu_prof_maybe_dump_req(u64 req_call_no) {}
+static inline u64 ocf_lfu_prof_now_ns(void) { return 0; }
+static inline u64 ocf_lfu_prof_delta_ns(u64 start_ns, u64 end_ns) { return 0; }
+static inline void ocf_lfu_prof_dump(ocf_cache_t cache, const char *reason) {}
+static inline void ocf_lfu_prof_maybe_dump_inc(ocf_cache_t cache, u64 inc_call_no) {}
+static inline void ocf_lfu_prof_maybe_dump_req(ocf_cache_t cache, u64 req_call_no) {}
 #endif
 
 static const uint32_t END_MARKER = (uint32_t)-1;
@@ -322,7 +344,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 #endif
 
 #if OCF_LFU_DEBUG_PROFILE
-    prof_call_no = (u64)atomic64_inc_return(&ocf_lfu_prof_stats.inc_calls);
+    prof_call_no = (u64)env_atomic64_inc_return(&ocf_lfu_prof_stats.inc_calls);
 #endif
 
     /** 
@@ -332,9 +354,9 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
      * */ 
     if (unlikely(old_freq >= MAX_FREQ - 1)) {
 #if OCF_LFU_DEBUG_PROFILE
-        atomic64_inc(&ocf_lfu_prof_stats.inc_sat_calls);
-        atomic64_inc(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
-        ocf_lfu_prof_maybe_dump_inc(prof_call_no);
+        env_atomic64_inc(&ocf_lfu_prof_stats.inc_sat_calls);
+        env_atomic64_inc(&ocf_lfu_prof_stats.inc_sat_skipped_calls);
+        ocf_lfu_prof_maybe_dump_inc(cache, prof_call_no);
 #endif
         return;
     }
@@ -345,7 +367,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     b = new_freq;
 
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
     t0 = ktime_get_ns();
 #endif
 
@@ -387,10 +409,10 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 
 #if OCF_LFU_DEBUG_PROFILE
     t3 = ktime_get_ns();
-    atomic64_add(t3 - t0, &ocf_lfu_prof_stats.inc_total_ns);
-    atomic64_add(t1 - t0, &ocf_lfu_prof_stats.inc_lock_wait_ns);
-    atomic64_add(t2 - t1, &ocf_lfu_prof_stats.inc_body_ns);
-    ocf_lfu_prof_maybe_dump_inc(prof_call_no);
+    env_atomic64_add(t3 - t0, &ocf_lfu_prof_stats.inc_total_ns);
+    env_atomic64_add(t1 - t0, &ocf_lfu_prof_stats.inc_lock_wait_ns);
+    env_atomic64_add(t2 - t1, &ocf_lfu_prof_stats.inc_body_ns);
+    ocf_lfu_prof_maybe_dump_inc(cache, prof_call_no);
 #endif
 }
 
@@ -398,7 +420,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.add_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.add_calls);
 #endif
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     meta->freq = 0;
@@ -410,7 +432,7 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 void ocf_lfu_remove(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.remove_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.remove_calls);
 #endif
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
@@ -664,7 +686,7 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
     uint32_t freq = meta->freq;
 
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.repart_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.repart_calls);
 #endif
 
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, freq);
@@ -803,8 +825,8 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
         return 0;
 
 #if OCF_LFU_DEBUG_PROFILE
-    req_call_no = (u64)atomic64_inc_return(&ocf_lfu_prof_stats.req_calls);
-    atomic64_add(cline_no, &ocf_lfu_prof_stats.req_clines_requested);
+    req_call_no = (u64)env_atomic64_inc_return(&ocf_lfu_prof_stats.req_calls);
+    env_atomic64_add(cline_no, &ocf_lfu_prof_stats.req_clines_requested);
     req_t0 = ktime_get_ns();
 #endif
 
@@ -889,9 +911,9 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
     }
 
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_add(i, &ocf_lfu_prof_stats.req_clines_assigned);
-    atomic64_add(ktime_get_ns() - req_t0, &ocf_lfu_prof_stats.req_total_ns);
-    ocf_lfu_prof_maybe_dump_req(req_call_no);
+    env_atomic64_add(i, &ocf_lfu_prof_stats.req_clines_assigned);
+    env_atomic64_add(ktime_get_ns() - req_t0, &ocf_lfu_prof_stats.req_total_ns);
+    ocf_lfu_prof_maybe_dump_req(cache, req_call_no);
 #endif
 
     // Return the number of cache lines actually assigned
@@ -1246,7 +1268,7 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     ENV_BUG_ON(meta->freq >= MAX_FREQ);
 
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.dirty_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.dirty_calls);
 #endif
 
     // Assert that cache line is currently not dirty
@@ -1268,7 +1290,7 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
 #if OCF_LFU_DEBUG_PROFILE
-    atomic64_inc(&ocf_lfu_prof_stats.clean_calls);
+    env_atomic64_inc(&ocf_lfu_prof_stats.clean_calls);
 #endif
 
     // Assert that cache line is currently dirty
