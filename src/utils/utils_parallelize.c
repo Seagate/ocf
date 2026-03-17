@@ -62,10 +62,6 @@ int ocf_parallelize_create(ocf_parallelize_t *parallelize,
 		ocf_parallelize_finish_t finish,
 		bool use_mngt_queue)
 {
-	// TEMP LOG
-	ocf_cache_log(cache, log_err, "parallelize_create shards_cnt=%u priv_size=%u queue_count=%u\n",
-              shards_cnt, priv_size, ocf_cache_get_queue_count(cache));
-
 	ocf_parallelize_t tmp_parallelize;
 	struct list_head *iter;
 	ocf_queue_t queue;

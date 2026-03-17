@@ -15,7 +15,7 @@
 
 // DEBUG PROFILING
 #ifndef OCF_LFU_DEBUG_PROFILE
-#define OCF_LFU_DEBUG_PROFILE 1
+#define OCF_LFU_DEBUG_PROFILE 0
 #endif
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -368,7 +368,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 
 #if OCF_LFU_DEBUG_PROFILE
     env_atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
-    t0 = ktime_get_ns();
+    t0 = env_get_tick_count();
 #endif
 
     ocf_metadata_lfu_wr_lock(&cache->metadata.lock, a);
@@ -376,7 +376,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
         ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
 
 #if OCF_LFU_DEBUG_PROFILE
-    t1 = ktime_get_ns();
+    t1 = env_get_tick_count();
 #endif
 
     // ocf_cache_log(cache, log_debug,
@@ -395,7 +395,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     meta->freq = new_freq;
 
 #if OCF_LFU_DEBUG_PROFILE
-    t2 = ktime_get_ns();
+    t2 = env_get_tick_count();
 #endif
 
     // ocf_cache_log(cache, log_debug,
@@ -408,7 +408,7 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, a);
 
 #if OCF_LFU_DEBUG_PROFILE
-    t3 = ktime_get_ns();
+    t3 = env_get_tick_count();
     env_atomic64_add(t3 - t0, &ocf_lfu_prof_stats.inc_total_ns);
     env_atomic64_add(t1 - t0, &ocf_lfu_prof_stats.inc_lock_wait_ns);
     env_atomic64_add(t2 - t1, &ocf_lfu_prof_stats.inc_body_ns);
@@ -827,7 +827,7 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
 #if OCF_LFU_DEBUG_PROFILE
     req_call_no = (u64)env_atomic64_inc_return(&ocf_lfu_prof_stats.req_calls);
     env_atomic64_add(cline_no, &ocf_lfu_prof_stats.req_clines_requested);
-    req_t0 = ktime_get_ns();
+    req_t0 = env_get_tick_count();
 #endif
 
     // Safety check: ensure request has enough unmapped lines for assignment
@@ -912,7 +912,7 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
 
 #if OCF_LFU_DEBUG_PROFILE
     env_atomic64_add(i, &ocf_lfu_prof_stats.req_clines_assigned);
-    env_atomic64_add(ktime_get_ns() - req_t0, &ocf_lfu_prof_stats.req_total_ns);
+    env_atomic64_add(env_get_tick_count() - req_t0, &ocf_lfu_prof_stats.req_total_ns);
     ocf_lfu_prof_maybe_dump_req(cache, req_call_no);
 #endif
 
