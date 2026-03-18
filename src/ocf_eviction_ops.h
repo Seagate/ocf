@@ -7,7 +7,6 @@
 #define EVICTION_OPS_H_
 
 #include "metadata/metadata.h"
-#include "ocf_eviction.h"
 
 struct ocf_eviction_policy {
 	ocf_cache_t owner;
@@ -71,6 +70,10 @@ struct eviction_policy_ops {
 	void (*clean_cline)(ocf_cache_t cache, struct ocf_part *part,
 			ocf_cache_line_t cline);
 		/*!< Mark cacheline clean in eviction metadata */
+
+	void (*clean)(ocf_cache_t cache, struct ocf_user_part *user_part,
+		ocf_queue_t io_queue, uint32_t count);
+		/*!< Start cacheline cleaning */
 
 	void (*populate)(ocf_cache_t cache,
 			void (*cmpl)(void *priv, int error), void *priv);

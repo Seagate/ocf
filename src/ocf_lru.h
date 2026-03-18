@@ -9,6 +9,7 @@
 
 #include "ocf_space.h"
 #include "ocf_lru_structs.h"
+#include "ocf_eviction.h"
 
 struct ocf_part;
 struct ocf_user_part;

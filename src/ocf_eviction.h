@@ -1,11 +1,14 @@
 #ifndef EVICTION_H_
 #define EVICTION_H_
 
-#include "ocf_cache.h"
-#include "ocf_request.h"
+#include "ocf/ocf.h"
 
 #define EVICTION_POLICY_CONFIG_BYTES 256
 #define EVICTION_POLICY_TYPE_MAX 2
+
+struct ocf_part;
+struct ocf_request;
+struct ocf_user_part;
 
 struct eviction_policy_config {
 	uint8_t data[EVICTION_POLICY_CONFIG_BYTES];
@@ -16,7 +19,7 @@ typedef struct ocf_eviction_policy *ocf_eviction_policy_t;
 typedef void (*ocf_eviction_populate_end_t)(void *priv, int error);
 
 void ocf_eviction_setup(ocf_cache_t cache);
-ocf_error_t ocf_eviction_init(ocf_cache_t cache, struct ocf_part *part);
+void ocf_eviction_init(ocf_cache_t cache, struct ocf_part *part);
 void ocf_eviction_deinit(ocf_cache_t cache);
 
 // ocf_error_t ocf_eviction_set_param(ocf_cache_t cache,
@@ -40,6 +43,9 @@ void ocf_eviction_dirty_cline(ocf_cache_t cache, struct ocf_part *part,
 		ocf_cache_line_t cline);
 void ocf_eviction_clean_cline(ocf_cache_t cache, struct ocf_part *part,
 		ocf_cache_line_t cline);
+
+void ocf_eviction_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
+		ocf_queue_t io_queue, uint32_t count);
 
 void ocf_eviction_populate(ocf_cache_t cache,
 		ocf_eviction_populate_end_t cmpl, void *priv);

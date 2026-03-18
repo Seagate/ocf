@@ -13,7 +13,7 @@
 #include "../promotion/promotion.h"
 #include "ocf/ocf_prefetch.h"
 #include "../prefetch/ocf_prefetch_priv.h"
-#include "ocf_eviction.h"
+#include "../ocf_eviction.h"
 
 #define CACHE_MAGIC_NUMBER	0x187E1CA6
 
@@ -59,6 +59,7 @@ struct ocf_superblock_config {
 
 	ocf_pf_mask_t prefetch_mask;
 	struct prefetch_policy_config prefetch[PREFETCH_POLICY_TYPE_MAX];
+	
 	ocf_eviction_t eviction_policy_type;
 	struct eviction_policy_config eviction[EVICTION_POLICY_TYPE_MAX];
 

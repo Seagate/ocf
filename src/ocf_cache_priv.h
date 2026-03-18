@@ -122,7 +122,7 @@ struct ocf_cache {
 
 	ocf_promotion_policy_t promotion_policy;
 
-	ocf_eviction_policy_t eviction_policy;
+	ocf_eviction_t eviction_policy;
 
 	struct {
 		uint32_t max_queue_size;

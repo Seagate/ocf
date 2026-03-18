@@ -1,4 +1,7 @@
 #include "ocf_eviction.h"
+#include "ocf_eviction_ops.h"
+#include "ocf_request.h"
+#include "ocf_space.h"
 #include "ocf_lfu.h"
 #include "ocf_lru.h"
 
@@ -15,24 +18,25 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
         .repart = ocf_lru_repart,
         .dirty_cline = ocf_lru_dirty_cline,
         .clean_cline = ocf_lru_clean_cline,
-        .populate = ocf_lru_populate
-    },
+        .clean = ocf_lru_clean,
+        .populate = ocf_lru_populate},
 
     [ocf_eviction_lfu] = {
         .name = "lfu", 
         .init = ocf_lfu_init, 
         .init_cline = ocf_lfu_init_cline, 
-        .hot_cline = ocf_lfu_hot_cline, 
+        .hot_cline = ocf_lfu_increment, 
         .add = ocf_lfu_add, 
-        .add_free = ocf_lfu_add,
+        .add_free = ocf_lfu_add, 
         .rm_cline = ocf_lfu_rm_cline, 
         .req_clines = ocf_lfu_req_clines, 
         .repart = ocf_lfu_repart, 
         .dirty_cline = ocf_lfu_dirty_cline, 
         .clean_cline = ocf_lfu_clean_cline, 
+        .clean = ocf_lfu_clean,
         .populate = ocf_lfu_populate
     }
-}
+};
 
 void ocf_eviction_setup(ocf_cache_t cache)
 {
@@ -170,6 +174,19 @@ void ocf_eviction_clean_cline(ocf_cache_t cache, struct ocf_part *part,
     if (ocf_eviction_policies[type].clean_cline)
     {
         ocf_eviction_policies[type].clean_cline(cache, part, cline);
+    }
+}
+
+void ocf_eviction_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
+                        ocf_queue_t io_queue, uint32_t count)
+{
+    ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (ocf_eviction_policies[type].clean)
+    {
+        ocf_eviction_policies[type].clean(cache, user_part, io_queue, count);
     }
 }
 
