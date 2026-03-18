@@ -91,7 +91,8 @@ static inline uint32_t ocf_evict_part_do(struct ocf_request *req,
 	}
 
 	// return ocf_lru_req_clines(req, &user_part->part, to_evict);
-	return ocf_lfu_req_clines(req, &user_part->part, to_evict);
+	// return ocf_lfu_req_clines(req, &user_part->part, to_evict);
+	return ocf_eviction_req_clines(req, &user_part->part, to_evict);
 }
 
 static inline uint32_t ocf_evict_user_partitions_once(ocf_cache_t cache,
@@ -211,7 +212,8 @@ static inline uint32_t ocf_remap_do(struct ocf_request *req)
 	/* First attempt to map from freelist */
 	if (ocf_lru_num_free(cache) > 0)
 		// remapped = ocf_lru_req_clines(req, &cache->free, remap_cline_no);
-		remapped = ocf_lfu_req_clines(req, &cache->free, remap_cline_no);
+		// remapped = ocf_lfu_req_clines(req, &cache->free, remap_cline_no);
+		remapped = ocf_eviction_req_clines(req, &cache->free, remap_cline_no);
 
 	if (remapped >= remap_cline_no)
 		return remapped;

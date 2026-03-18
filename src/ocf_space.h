@@ -13,6 +13,7 @@
 #include "ocf_lru_structs.h"
 
 #include "ocf_lfu.h"
+#include "ocf_eviction.h"
 
 #define OCF_NUM_LRU_LISTS 32
 #define OCF_LRU_CHUNK_SIZE 256

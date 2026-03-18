@@ -141,7 +141,9 @@ void ocf_user_part_move(struct ocf_request *req)
 
 		// ocf_lru_repart(cache, line, &cache->user_parts[id_old].part,
 		// 		&cache->user_parts[id_new].part);
-		ocf_lfu_repart(cache, line, &cache->user_parts[id_old].part,
+		// ocf_lfu_repart(cache, line, &cache->user_parts[id_old].part,
+		// 		&cache->user_parts[id_new].part);
+		ocf_eviction_repart(cache, line, &cache->user_parts[id_old].part,
 				&cache->user_parts[id_new].part);
 
 		/* Check if cache line is dirty. If yes then need to change

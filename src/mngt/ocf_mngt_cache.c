@@ -85,6 +85,8 @@ struct ocf_cache_mngt_init_params {
 		/*!< cache mode */
 
 		ocf_promotion_t promotion_policy;
+
+		ocf_eviction_t eviction_policy;
 	} metadata;
 };
 
@@ -229,10 +231,11 @@ static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
 
 	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
 		// ocf_lru_init(cache, &cache->user_parts[part_id].part);
-		ocf_lfu_init(cache, &cache->user_parts[part_id].part);
+		// ocf_lfu_init(cache, &cache->user_parts[part_id].part);
+		ocf_eviction_init(cache, &cache->user_parts[part_id].part);
 
-	ocf_lru_init(cache, &cache->free);
-	ocf_lru_init(cache, &cache->free_detached);
+	ocf_eviction_init(cache, &cache->free);
+	ocf_eviction_init(cache, &cache->free_detached);
 
 	ocf_pipeline_next(pipeline);
 }
@@ -578,7 +581,8 @@ static void ocf_mngt_cline_reset_metadata(ocf_cache_t cache,
 	ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
 
 	// ocf_lru_add_free(cache, cline);
-	ocf_lfu_add(cache, cline); // should already be in freelist?
+	// ocf_lfu_add(cache, cline); // should already be in freelist?
+	ocf_eviction_add_free(cache, cline);
 }
 
 static void ocf_mngt_cline_rebuild_metadata(ocf_cache_t cache,
@@ -598,10 +602,12 @@ static void ocf_mngt_cline_rebuild_metadata(ocf_cache_t cache,
 	ocf_hb_id_naked_unlock_wr(&cache->metadata.lock, hash_index);
 
 	// ocf_lru_init_cline(cache, cline);
-	ocf_lfu_init_cline(cache, cline);
+	// ocf_lfu_init_cline(cache, cline);
+	ocf_eviction_init_cline(cache, cline);
 
 	// ocf_lru_add(cache, cline);
-	ocf_lfu_add(cache, cline);
+	// ocf_lfu_add(cache, cline);
+	ocf_eviction_add(cache, cline);
 }
 
 static int ocf_mngt_rebuild_metadata_handle(ocf_parallelize_t parallelize,
@@ -1466,7 +1472,9 @@ static void _ocf_mngt_attach_populate_free(ocf_pipeline_t pipeline,
 
 	// ocf_lru_populate(cache, _ocf_mngt_attach_populate_free_complete,
 			// context);
-	ocf_lfu_populate(cache, _ocf_mngt_attach_populate_free_complete,
+	// ocf_lfu_populate(cache, _ocf_mngt_attach_populate_free_complete,
+			// context);
+	ocf_eviction_populate(cache, _ocf_mngt_attach_populate_free_complete,
 			context);
 }
 
@@ -1598,6 +1606,7 @@ static void _ocf_mngt_cache_init(ocf_cache_t cache,
 	cache->conf_meta->promotion_policy_type = params->metadata.promotion_policy;
 	cache->conf_meta->prefetch_mask = OCF_PF_MASK_DEFAULT;
 	ocf_prefetch_setup(cache);
+	cache->conf_meta->eviction_policy_type = params->metadata.eviction_policy;
 	__set_cleaning_policy(cache, ocf_cleaning_default);
 
 	/* Init Partitions */
@@ -1623,6 +1632,7 @@ static int _ocf_mngt_cache_start(ocf_ctx_t ctx, ocf_cache_t *cache,
 	params.metadata.line_size = cfg->cache_line_size;
 	params.metadata_volatile = cfg->metadata_volatile;
 	params.metadata.promotion_policy = cfg->promotion_policy;
+	params.metadata.eviction_policy = cfg->eviction_policy;
 	params.locked = cfg->locked;
 
 	ocf_ctx_get(ctx);

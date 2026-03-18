@@ -40,9 +40,7 @@ void ocf_lru_detach(ocf_cache_t cache, struct ocf_part *part,
 		ocf_cache_line_t cline);
 void ocf_lru_restore(ocf_cache_t cache, ocf_cache_line_t cline);
 
-typedef void (*ocf_lru_populate_end_t)(void *priv, int error);
-
 void ocf_lru_populate(ocf_cache_t cache,
-		ocf_lru_populate_end_t cmpl, void *priv);
+		ocf_eviction_populate_end_t cmpl, void *priv);
 
 #endif

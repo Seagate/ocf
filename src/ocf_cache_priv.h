@@ -22,6 +22,7 @@
 #include "ocf_logger_priv.h"
 #include "ocf_queue_priv.h"
 #include "promotion/promotion.h"
+#include "ocf_eviction.h"
 
 #define DIRTY_FLUSHED 1
 #define DIRTY_NOT_FLUSHED 0
@@ -120,6 +121,8 @@ struct ocf_cache {
 	env_spinlock io_queues_lock;
 
 	ocf_promotion_policy_t promotion_policy;
+
+	ocf_eviction_policy_t eviction_policy;
 
 	struct {
 		uint32_t max_queue_size;

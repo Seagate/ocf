@@ -265,6 +265,11 @@ struct ocf_mngt_cache_config {
 	ocf_promotion_t promotion_policy;
 
 	/**
+	 * @brief Eviction policy type
+	 */
+	ocf_eviction_t eviction_policy;
+
+	/**
 	 * @brief Cache line size
 	 */
 	ocf_cache_line_size_t cache_line_size;
@@ -311,6 +316,7 @@ static inline void ocf_mngt_cache_config_set_default(
 {
 	cfg->cache_mode = ocf_cache_mode_default;
 	cfg->promotion_policy = ocf_promotion_default;
+	cfg->eviction_policy = ocf_eviction_default;
 	cfg->cache_line_size = ocf_cache_line_size_4;
 	cfg->metadata_volatile = false;
 	cfg->backfill.max_queue_size = 65536;

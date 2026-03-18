@@ -1004,7 +1004,7 @@ struct ocf_lru_populate_context {
 	ocf_cache_t cache;
 	env_atomic curr_size;
 
-	ocf_lru_populate_end_t cmpl;
+	ocf_eviction_populate_end_t cmpl;
 	void *priv;
 };
 
@@ -1092,7 +1092,7 @@ static void ocf_lru_populate_finish(ocf_parallelize_t parallelize,
 
 /* put invalid cachelines on freelist partition lru list  */
 void ocf_lru_populate(ocf_cache_t cache,
-		ocf_lru_populate_end_t cmpl, void *priv)
+		ocf_eviction_populate_end_t cmpl, void *priv)
 {
 	struct ocf_lru_populate_context *context;
 	ocf_parallelize_t parallelize;

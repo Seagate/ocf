@@ -4,6 +4,7 @@
 #define OCF_LFU_H_
 
 #include "ocf_space.h"
+#include "ocf_eviction.h"
 
 #define MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)
 
@@ -48,8 +49,7 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
                    ocf_queue_t io_queue, uint32_t count);
 
-typedef void (*ocf_lfu_populate_end_t)(void *priv, int error);
 void ocf_lfu_populate(ocf_cache_t cache,
-		ocf_lfu_populate_end_t cmpl, void *priv);
+		ocf_eviction_populate_end_t cmpl, void *priv);
 
 #endif

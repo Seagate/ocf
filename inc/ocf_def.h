@@ -281,6 +281,23 @@ typedef enum {
 } ocf_promotion_t;
 
 /**
+ * OCF supported eviction policy types
+ */
+typedef enum {
+	ocf_eviction_lru = 0,
+	/*!< Least Recently Used (LRU) policy */
+
+	ocf_eviction_lfu,
+	/*!< Least Frequently Used (LFU) policy */
+
+	ocf_eviction_max,
+	/*!< Stopper of enumerator */
+
+	ocf_eviction_default = ocf_eviction_lru
+	/*!< Default eviction policy*/
+} ocf_eviction_t;
+
+/**
  * OCF supported Write-Back cleaning policies type
  */
 typedef enum {
