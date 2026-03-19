@@ -32,6 +32,8 @@ struct ocf_part_runtime;
 struct ocf_part_cleaning_ctx;
 struct ocf_request;
 
+int ocf_lfu_init_part(ocf_cache_t cache, struct ocf_part *part);
+void ocf_lfu_deinit_part(ocf_cache_t cache, struct ocf_part *part);
 void ocf_lfu_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline);

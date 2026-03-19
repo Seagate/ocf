@@ -256,6 +256,8 @@ static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
 	ret = ocf_eviction_init(cache, &cache->free_detached);
 	if (ret)
 		OCF_PL_FINISH_RET(pipeline, ret);
+		
+	ocf_cache_log(cache, log_info, "[_init_parts_attached] Initialized successfully!\n");
 
 	ocf_pipeline_next(pipeline);
 }
@@ -1553,6 +1555,9 @@ static void _ocf_mngt_attach_populate_free(ocf_pipeline_t pipeline,
 {
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
+
+	ocf_cache_log(cache, log_info, "before populate: free.runtime=%px free.eviction_runtime=%px\n",
+		cache->free.runtime, cache->free.eviction_runtime);
 
 	// ocf_lru_populate(cache, _ocf_mngt_attach_populate_free_complete,
 	// context);

@@ -26,6 +26,8 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
     [ocf_eviction_lfu] = {
         .name = "lfu", 
         .init = ocf_lfu_init, 
+        .init_part = ocf_lfu_init_part,
+        .deinit_part = ocf_lfu_deinit_part,
         .init_cline = ocf_lfu_init_cline, 
         .hot_cline = ocf_lfu_increment, 
         .add = ocf_lfu_add, 
@@ -65,7 +67,7 @@ int ocf_eviction_init_part(ocf_cache_t cache, struct ocf_part *part) {
     {
         return ocf_eviction_policies[type].init_part(cache, part);
     } else {
-        return 0;
+        return 1;
     }
 }
 
