@@ -216,6 +216,8 @@ void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part)
 
     // Reset the global count of cache lines in this partition
     env_atomic_set(&part->runtime->curr_size, 0);
+
+    ocf_cache_log(cache, log_info, "LFU initialized!");
 }
 
 static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_line_t cline)

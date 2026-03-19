@@ -293,7 +293,7 @@ typedef enum {
 	ocf_eviction_max,
 	/*!< Stopper of enumerator */
 
-	ocf_eviction_default = ocf_eviction_lru
+	ocf_eviction_default = ocf_eviction_lfu
 	/*!< Default eviction policy*/
 } ocf_eviction_t;
 

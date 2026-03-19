@@ -1663,6 +1663,8 @@ static void _ocf_mngt_cache_init(ocf_cache_t cache,
 	cache->conf_meta->prefetch_mask = OCF_PF_MASK_DEFAULT;
 	ocf_prefetch_setup(cache);
 	cache->conf_meta->eviction_policy_type = params->metadata.eviction_policy;
+	// cache->conf_meta->eviction_policy_type = params->metadata.eviction_policy;
+	cache->conf_meta->eviction_policy_type = ocf_eviction_default; // DEBUG
 	__set_cleaning_policy(cache, ocf_cleaning_default);
 
 	/* Init Partitions */
@@ -1958,6 +1960,7 @@ static void _ocf_mngt_init_promotion(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
+// TODO: Use this to init metadata as well??
 static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 									void *priv, ocf_pipeline_arg_t arg)
 {
@@ -1965,6 +1968,9 @@ static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 	ocf_cache_t cache = context->cache;
 
 	cache->eviction_policy = cache->conf_meta->eviction_policy_type;
+
+	ocf_cache_log(cache, log_debug,
+					  "[_ocf_mngt_init_eviction] cache->eviction_policy = %d\n", cache->eviction_policy);
 
 	ocf_pipeline_next(pipeline);
 }
