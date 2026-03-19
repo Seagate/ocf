@@ -25,6 +25,12 @@
 
 static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
 
+/* Helper to get the partition eviction runtime information */
+static inline struct ocf_lru_part_runtime *ocf_part_lru(struct ocf_part *part)
+{
+    return (struct ocf_lru_part_runtime*)(part->eviction_runtime);
+}
+
 /* update list last_hot index. returns pivot element (the one for which hot
  * status effectively changes during balancing). */
 static inline ocf_cache_line_t balance_update_last_hot(ocf_cache_t cache,
@@ -243,11 +249,15 @@ void ocf_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 struct ocf_lru_list *ocf_lru_get_list(struct ocf_part *part,
 		uint32_t lru_idx, bool clean)
 {
+	struct ocf_lru_part_runtime *rt = ocf_part_lru(part);
+
+	ENV_BUG_ON(!rt);
+
 	if (part->id == PARTITION_FREELIST)
 		clean = true;
 
-	return clean ? &part->runtime->lru[lru_idx].clean :
-			&part->runtime->lru[lru_idx].dirty;
+	return clean ? &rt->lru[lru_idx].clean :
+			&rt->lru[lru_idx].dirty;
 }
 
 static inline struct ocf_lru_list *lru_get_cline_list(ocf_cache_t cache,
@@ -940,6 +950,40 @@ static inline void _lru_init(struct ocf_lru_list *list, bool track_hot)
 	list->num_hot = 0;
 	list->last_hot = end_marker;
 	list->track_hot = track_hot;
+}
+
+/*
+ * Allocate and initialize LRU runtime for a single partition.
+ * Call this from your eviction-policy init path for every partition.
+ */
+int ocf_lru_init_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	struct ocf_lru_part_runtime *rt;
+
+	rt = env_vzalloc(sizeof(*rt));
+	if (!rt)
+		return -OCF_ERR_NO_MEM;
+
+	part->eviction_runtime = rt;
+
+	ocf_lru_init(cache, part);
+
+	ocf_cache_log(cache, log_info, "LRU initialized for part %u", part->id);
+
+	return 0;
+}
+
+/*
+ * Free per-part LRU runtime.
+ * Call this from your eviction-policy deinit / switch path.
+ */
+void ocf_lru_deinit_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	if (!part->eviction_runtime)
+		return;
+
+	env_vfree(part->eviction_runtime);
+	part->eviction_runtime = NULL;
 }
 
 void ocf_lru_init(ocf_cache_t cache, struct ocf_part *part)

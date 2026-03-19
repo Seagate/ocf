@@ -27,9 +27,12 @@ struct eviction_policy_ops {
 		/*!< Initialize eviction policy default config */
 
 	void (*init)(ocf_cache_t cache, struct ocf_part *part);
-		/*!< Allocate and initialize eviction policy */
+		/*!< Initialize/reset eviction policy structures */
 
-	void (*deinit)(ocf_eviction_policy_t policy);
+	int (*init_part)(ocf_cache_t cache, struct ocf_part *part);
+		/*!< Allocate memory for partition and initialize eviction policy */
+
+	void (*deinit_part)(ocf_cache_t cache, struct ocf_part *part);
 		/*!< Deinitialize and free eviction policy */
 
 	// ocf_error_t (*set_param)(ocf_cache_t cache, uint8_t param_id,

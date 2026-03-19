@@ -149,14 +149,24 @@ static inline void ocf_lfu_prof_maybe_dump_req(ocf_cache_t cache, u64 req_call_n
 
 static const uint32_t END_MARKER = (uint32_t)-1;
 
+/* Helper to get the partition eviction runtime information */
+static inline struct ocf_lfu_part_runtime *ocf_part_lfu(struct ocf_part *part)
+{
+    return (struct ocf_lfu_part_runtime*)(part->eviction_runtime);
+}
+
 /** Get frequency bucket from cache partition */
 static inline struct ocf_lfu_list *ocf_lfu_get_list(struct ocf_part *part, uint32_t freq, bool clean)
 {
+    struct ocf_lfu_part_runtime *rt = ocf_part_lfu(part);
+
+    ENV_BUG_ON(!rt);
+
     // ENV_BUG_ON(freq >= MAX_FREQ);
     if (part->id == PARTITION_FREELIST)
         clean = true;
 
-    return clean ? &part->runtime->freq_buckets[freq].clean : &part->runtime->freq_buckets[freq].dirty;
+    return clean ? &rt->freq_buckets[freq].clean : &rt->freq_buckets[freq].dirty;
 }
 
 /** Get cache partition that cache line belongs to */
@@ -197,6 +207,40 @@ static inline void _lfu_init(struct ocf_lfu_list *list)
     list->num_nodes = 0;
     list->head = END_MARKER;
     list->tail = END_MARKER;
+}
+
+/*
+ * Allocate and initialize LRU runtime for a single partition.
+ * Call this from your eviction-policy init path for every partition.
+ */
+int ocf_lfu_init_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	struct ocf_lfu_part_runtime *rt;
+
+	rt = env_vzalloc(sizeof(*rt));
+	if (!rt)
+		return -OCF_ERR_NO_MEM;
+
+	part->eviction_runtime = rt;
+
+	ocf_lfu_init(cache, part);
+
+	ocf_cache_log(cache, log_info, "LFU initialized for part %u", part->id);
+
+	return 0;
+}
+
+/*
+ * Free per-part LRU runtime.
+ * Call this from your eviction-policy deinit / switch path.
+ */
+void ocf_lfu_deinit_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	if (!part->eviction_runtime)
+		return;
+
+	env_vfree(part->eviction_runtime);
+	part->eviction_runtime = NULL;
 }
 
 void ocf_lfu_init(ocf_cache_t cache, struct ocf_part *part)

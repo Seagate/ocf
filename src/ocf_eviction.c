@@ -9,6 +9,8 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
     [ocf_eviction_lru] = {
         .name = "lru",
         .init = ocf_lru_init,
+        .init_part = ocf_lru_init_part,
+        .deinit_part = ocf_lru_deinit_part,
         .init_cline = ocf_lru_init_cline,
         .hot_cline = ocf_lru_hot_cline,
         .add = ocf_lru_add,
@@ -54,7 +56,32 @@ void ocf_eviction_init(ocf_cache_t cache, struct ocf_part *part)
     }
 }
 
-void ocf_eviction_deinit(ocf_cache_t cache) {}
+int ocf_eviction_init_part(ocf_cache_t cache, struct ocf_part *part) {
+    ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (ocf_eviction_policies[type].init_part)
+    {
+        return ocf_eviction_policies[type].init_part(cache, part);
+    } else {
+        return 0;
+    }
+}
+
+void ocf_eviction_deinit_part(ocf_cache_t cache, struct ocf_part *part) {
+    ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (!part->eviction_runtime)
+		return;
+
+    if (ocf_eviction_policies[type].deinit_part)
+    {
+        ocf_eviction_policies[type].deinit_part(cache, part);
+    } 
+}
 
 // ocf_error_t ocf_eviction_set_param(ocf_cache_t cache,
 // 		uint8_t param_id, uint32_t param_value);

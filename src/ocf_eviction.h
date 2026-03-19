@@ -20,7 +20,8 @@ typedef void (*ocf_eviction_populate_end_t)(void *priv, int error);
 
 void ocf_eviction_setup(ocf_cache_t cache);
 void ocf_eviction_init(ocf_cache_t cache, struct ocf_part *part);
-void ocf_eviction_deinit(ocf_cache_t cache);
+int ocf_eviction_init_part(ocf_cache_t cache, struct ocf_part *part);
+void ocf_eviction_deinit_part(ocf_cache_t cache, struct ocf_part *part);
 
 // ocf_error_t ocf_eviction_set_param(ocf_cache_t cache,
 // 		uint8_t param_id, uint32_t param_value);

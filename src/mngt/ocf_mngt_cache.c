@@ -142,6 +142,9 @@ struct ocf_cache_attach_context
 		bool cleaning_initialized : 1;
 		/*!< Cleaning policy has been initialized */
 
+		bool eviction_initialized : 1;
+		/*!< Eviction policy has been initialized */
+
 		bool cores_opened : 1;
 		/*!< underlying cores are opened (happens only during
 		 * load or recovery
@@ -236,16 +239,41 @@ static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
 	struct ocf_init_metadata_context *context = priv;
 	ocf_cache_t cache = context->cache;
 	ocf_part_id_t part_id;
+	int ret;
 
-	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++) {
 		// ocf_lru_init(cache, &cache->user_parts[part_id].part);
 		// ocf_lfu_init(cache, &cache->user_parts[part_id].part);
-		ocf_eviction_init(cache, &cache->user_parts[part_id].part);
+		ret = ocf_eviction_init_part(cache, &cache->user_parts[part_id].part);
+		if (ret)
+			OCF_PL_FINISH_RET(pipeline, ret);
+	}
 
-	ocf_eviction_init(cache, &cache->free);
-	ocf_eviction_init(cache, &cache->free_detached);
+	ret = ocf_eviction_init_part(cache, &cache->free);
+	if (ret)
+		OCF_PL_FINISH_RET(pipeline, ret);
+
+	ret = ocf_eviction_init(cache, &cache->free_detached);
+	if (ret)
+		OCF_PL_FINISH_RET(pipeline, ret);
 
 	ocf_pipeline_next(pipeline);
+}
+
+static void __deinit_eviction_policy(ocf_cache_t cache) {
+	ocf_part_id_t part_id;
+
+	/* free per-user-part runtime */
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
+		ocf_eviction_deinit_part(cache, &cache->user_parts[part_id].part);
+
+	/* free freelist runtime */
+	ocf_eviction_deinit_part(cache, &cache->free);
+
+	// /* free cache-wide policy object, if you have one */
+	// ocf_eviction_deinit(cache);
+
+	cache->eviction_policy = ocf_eviction_default;
 }
 
 static ocf_error_t __init_cleaning_policy(ocf_cache_t cache)
@@ -838,6 +866,8 @@ static void _ocf_mngt_init_metadata_complete(void *priv, int error)
 					  "ERROR: Cannot initialize cache metadata\n");
 		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_NO_MEM);
 	}
+
+	context->flags.eviction_initialized = true;
 
 	ocf_pipeline_next(context->pipeline);
 }
@@ -2170,10 +2200,13 @@ static void _ocf_mngt_attach_handle_error(
 	if (context->flags.cleaning_initialized)
 		__deinit_cleaning_policy(cache);
 
+	if(context->flags.eviction_initialized)
+		__deinit_eviction_policy(cache);
+
 	if (context->flags.cores_opened)
 		_ocf_mngt_deinit_added_cores(context);
 
-	if (context->flags.attached_metadata_inited)
+	if (context->flags.attached_metadata_inited) 
 		ocf_metadata_deinit_variable_size(cache);
 
 	if (context->flags.concurrency_inited)
