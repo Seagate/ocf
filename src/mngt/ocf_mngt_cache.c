@@ -1698,8 +1698,7 @@ static void _ocf_mngt_cache_init(ocf_cache_t cache,
 	cache->conf_meta->prefetch_mask = OCF_PF_MASK_DEFAULT;
 	ocf_prefetch_setup(cache);
 	cache->conf_meta->eviction_policy_type = params->metadata.eviction_policy;
-	// cache->conf_meta->eviction_policy_type = params->metadata.eviction_policy;
-	cache->conf_meta->eviction_policy_type = ocf_eviction_default; // DEBUG
+	// cache->conf_meta->eviction_policy_type = ocf_eviction_default; // DEBUG
 	__set_cleaning_policy(cache, ocf_cleaning_default);
 
 	/* Init Partitions */
@@ -4056,6 +4055,68 @@ int ocf_mngt_cache_prefetch_get_param(ocf_cache_t cache, ocf_pf_id_t pf_id,
 		return -OCF_ERR_CACHE_STANDBY;
 
 	return ocf_prefetch_get_param(cache, pf_id, param_id, param_value);
+}
+
+int ocf_mngt_cache_eviction_set_policy(ocf_cache_t cache, ocf_eviction_t type)
+{
+	int result;
+	ocf_eviction_t prev_policy;
+
+	if (ocf_cache_is_standby(cache))
+		return -OCF_ERR_CACHE_STANDBY;
+
+	if (!ocf_cache_is_device_attached(cache))
+		return -OCF_ERR_CACHE_DETACHED;
+
+	ocf_metadata_start_exclusive_access(&cache->metadata.lock);
+
+	prev_policy = cache->eviction_policy;
+
+	if(type == prev_policy) {
+		ocf_cache_log(cache, log_info, "Eviction policy '%s' is already set\n",
+			      ocf_eviction_policies[type].name);
+		return 0;
+	}
+
+	__deinit_eviction_policy(cache);
+
+	cache->conf_meta->eviction_policy_type = type;
+	cache->eviction_policy = type;
+
+	result = __init_eviction_policy(cache);
+
+	if (result) {
+		ocf_cache_log(cache, log_err,
+				"Error switching to new eviction policy\n");
+		ocf_cache_log(cache, log_err,
+				"Falling back to default eviction policy (%s)\n", ocf_eviction_policies[ocf_eviction_default].name);
+		cache->conf_meta->eviction_policy_type = ocf_eviction_default;
+		cache->eviction_policy = ocf_eviction_default;
+	} else {
+		ocf_cache_log(cache, log_info,
+				"Switched to '%s' eviction policy\n",
+				ocf_eviction_policies[type].name);
+	}
+
+	ocf_metadata_end_exclusive_access(&cache->metadata.lock);
+
+	return result;
+}
+
+int ocf_mngt_cache_eviction_get_policy(ocf_cache_t cache, ocf_eviction_t *type)
+{
+	OCF_CHECK_NULL(type);
+
+	if (ocf_cache_is_standby(cache))
+		return -OCF_ERR_CACHE_STANDBY;
+
+	ocf_metadata_start_shared_access(&cache->metadata.lock, 0);
+
+	*type = cache->conf_meta->eviction_policy_type;
+
+	ocf_metadata_end_shared_access(&cache->metadata.lock, 0);
+
+	return 0;
 }
 
 int ocf_mngt_cache_reset_fallback_pt_error_counter(ocf_cache_t cache)

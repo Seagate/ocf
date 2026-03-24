@@ -191,6 +191,12 @@ int ocf_metadata_validate_superblock(ocf_ctx_t ctx,
 		return -OCF_ERR_INVAL;
 	}
 
+	if(superblock->eviction_policy_type < 0 || 
+		superblock->eviction_policy_type >= ocf_eviction_max) {
+		ocf_log_invalid_superblock("eviction policy");
+		return -OCF_ERR_INVAL;
+	}
+
 	return 0;
 }
 

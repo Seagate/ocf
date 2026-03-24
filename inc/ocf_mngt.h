@@ -1105,6 +1105,29 @@ int ocf_mngt_cache_prefetch_set_param(ocf_cache_t cache, ocf_pf_id_t pf_id,
 int ocf_mngt_cache_prefetch_get_param(ocf_cache_t cache, ocf_pf_id_t pf_id,
 		uint32_t param_id, uint32_t *param_value);
 
+		
+/**
+ * @brief Set eviction policy parameter for given cache
+ *
+ * @param[in] cache Cache handle
+ * @param[in] type Eviction policy type
+ *
+ * @retval 0 Parameter has been set successfully
+ * @retval Non-zero Error occurred and parameter has not been set
+ */
+int ocf_mngt_cache_eviction_set_policy(ocf_cache_t cache, ocf_eviction_t type);
+
+/**
+ * @brief Get eviction policy in given cache
+ *
+ * @param[in] cache Cache handle
+ * @param[out] type Policy type
+ *
+ * @retval 0 success
+ * @retval Non-zero Error occurred and policy type could not be retrieved
+ */
+int ocf_mngt_cache_eviction_get_policy(ocf_cache_t cache, ocf_eviction_t *type);
+
 /**
  * @brief IO class configuration
  */
