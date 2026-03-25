@@ -102,6 +102,12 @@ ocf_cache_mode_t ocf_cache_get_mode(ocf_cache_t cache)
 	return cache->conf_meta->cache_mode;
 }
 
+ocf_eviction_t ocf_cache_get_eviction_policy(ocf_cache_t cache) {
+	OCF_CHECK_NULL(cache);
+
+	return cache->eviction_policy;
+}
+
 static uint64_t _calc_dirty_for(uint64_t dirty_since)
 {
 	uint64_t current_time = env_ticks_to_secs(env_get_tick_count());

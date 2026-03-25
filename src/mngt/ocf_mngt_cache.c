@@ -30,7 +30,7 @@
 #include "../concurrency/ocf_metadata_concurrency.h"
 // #include "../ocf_lru.h"
 // #include "../ocf_lfu.h"
-#include "../ocf_eviction.h"
+#include "../ocf_eviction_ops.h"
 #include "../ocf_ctx_priv.h"
 #include "../cleaning/cleaning.h"
 #include "../promotion/ops.h"
@@ -233,21 +233,28 @@ static void __init_partitions(ocf_cache_t cache)
 	}
 }
 
+static int __init_eviction_policy(ocf_cache_t cache) {
+	ocf_part_id_t part_id;
+	int ret;
+
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++) {
+		ret = ocf_eviction_init_part(cache, &cache->user_parts[part_id].part);
+		if (ret)
+			return ret;
+	}
+
+	ret = ocf_eviction_init_part(cache, &cache->free);
+	return ret;
+}
+
 static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
 								 ocf_pipeline_arg_t arg)
 {
 	struct ocf_init_metadata_context *context = priv;
 	ocf_cache_t cache = context->cache;
-	ocf_part_id_t part_id;
 	int ret;
 
-	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++) {
-		// ocf_lru_init(cache, &cache->user_parts[part_id].part);
-		// ocf_lfu_init(cache, &cache->user_parts[part_id].part);
-		ret = ocf_eviction_init_part(cache, &cache->user_parts[part_id].part);
-		if (ret)
-			OCF_PL_FINISH_RET(pipeline, ret);
-	}
+	ret = __init_eviction_policy(cache);
 
 	ret = ocf_eviction_init_part(cache, &cache->free);
 	if (ret)
@@ -1555,9 +1562,6 @@ static void _ocf_mngt_attach_populate_free(ocf_pipeline_t pipeline,
 {
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
-
-	ocf_cache_log(cache, log_info, "before populate: free.runtime=%px free.eviction_runtime=%px\n",
-		cache->free.runtime, cache->free.eviction_runtime);
 
 	// ocf_lru_populate(cache, _ocf_mngt_attach_populate_free_complete,
 	// context);

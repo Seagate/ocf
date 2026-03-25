@@ -192,6 +192,15 @@ bool ocf_cache_is_standby(ocf_cache_t cache);
 ocf_cache_mode_t ocf_cache_get_mode(ocf_cache_t cache);
 
 /**
+ * @brief Get eviction policy of given cache object
+ *
+ * @param[in] cache Cache object
+ *
+ * @retval Cache mode
+ */
+ocf_eviction_t ocf_cache_get_eviction_policy(ocf_cache_t cache);
+
+/**
  * @brief Get cache line size of given cache object
  *
  * @param[in] cache Cache object
