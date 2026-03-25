@@ -9,7 +9,7 @@
 #include "../ocf_request.h"
 #include "../metadata/metadata.h"
 #include "../engine/cache_engine.h"
-#include "../ocf_lru.h"
+#include "../eviction/ocf_lru.h"
 #include "utils_user_part.h"
 
 static struct ocf_lst_entry *ocf_user_part_lst_getter_valid(

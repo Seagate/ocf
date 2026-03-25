@@ -7,7 +7,7 @@
 #ifndef __EVICTION_LRU_H__
 #define __EVICTION_LRU_H__
 
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_lru_structs.h"
 #include "ocf_eviction.h"
 

@@ -14,7 +14,7 @@
 #include "../metadata/metadata.h"
 #include "../engine/cache_engine.h"
 #include "../ocf_request.h"
-#include "../ocf_lru.h"
+#include "../eviction/ocf_lru.h"
 #include "../ocf_logger_priv.h"
 #include "../ocf_queue_priv.h"
 #include "../engine/engine_common.h"

@@ -4,7 +4,7 @@
  */
 
 /*
- * <tested_file_path>src/ocf_lfu.c</tested_file_path>
+ * <tested_file_path>src/eviction/ocf_lfu.c</tested_file_path>
  * <tested_function>_lfu_init</tested_function>
  * <functions_to_leave>
  * ocf_lfu_add
@@ -29,7 +29,7 @@
 #include "print_desc.h"
 
 #include "ocf_space.h"
-#include "ocf_lfu.h"
+#include "eviction/ocf_lfu.h"
 #include "utils/utils_cleaner.h"
 #include "utils/utils_cache_line.h"
 #include "utils/utils_generator.h"
@@ -41,7 +41,7 @@
 #include "ocf_request.h"
 #include "engine/engine_common.h"
 
-#include "ocf_lfu.c/lfu_generated_wraps.c"
+#include "eviction/ocf_lfu.c/lfu_generated_wraps.c"
 
 #define META_COUNT 128
 

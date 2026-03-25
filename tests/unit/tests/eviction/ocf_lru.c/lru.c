@@ -4,7 +4,7 @@
  */
 
 /*
- * <tested_file_path>src/ocf_lru.c</tested_file_path>
+ * <tested_file_path>src/eviction/ocf_lru.c</tested_file_path>
  * <tested_function>_lru_init</tested_function>
  * <functions_to_leave>
  * 	update_lru_head
@@ -42,7 +42,7 @@
 #include "../engine/engine_zero.h"
 #include "../ocf_request.h"
 
-#include "ocf_lru.c/lru_generated_wraps.c"
+#include "eviction/ocf_lru.c/lru_generated_wraps.c"
 
 #define META_COUNT 128
 

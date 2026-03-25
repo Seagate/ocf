@@ -6,20 +6,20 @@
  */
 
 #include "ocf_env.h"
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_env_refcnt.h"
 #include "ocf_lru.h"
-#include "utils/utils_cleaner.h"
-#include "utils/utils_cache_line.h"
-#include "utils/utils_generator.h"
-#include "utils/utils_parallelize.h"
-#include "concurrency/ocf_concurrency.h"
-#include "mngt/ocf_mngt_common.h"
-#include "engine/engine_zero.h"
-#include "ocf_cache_priv.h"
-#include "ocf_request.h"
-#include "engine/engine_common.h"
-#include "utils/utils_user_part.h"
+#include "../utils/utils_cleaner.h"
+#include "../utils/utils_cache_line.h"
+#include "../utils/utils_generator.h"
+#include "../utils/utils_parallelize.h"
+#include "../concurrency/ocf_concurrency.h"
+#include "../mngt/ocf_mngt_common.h"
+#include "../engine/engine_zero.h"
+#include "../ocf_cache_priv.h"
+#include "../ocf_request.h"
+#include "../engine/engine_common.h"
+#include "../utils/utils_user_part.h"
 
 #define OCF_LRU_MAX_LRU_ELEMENT_IDX 256
 

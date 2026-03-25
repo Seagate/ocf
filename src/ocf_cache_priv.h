@@ -22,7 +22,7 @@
 #include "ocf_logger_priv.h"
 #include "ocf_queue_priv.h"
 #include "promotion/promotion.h"
-#include "ocf_eviction.h"
+#include "eviction/ocf_eviction.h"
 
 #define DIRTY_FLUSHED 1
 #define DIRTY_NOT_FLUSHED 0

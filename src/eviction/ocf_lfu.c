@@ -1,17 +1,17 @@
 // ocf_lfu.c - Minimal LFU implementation
 
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_lfu.h"
-#include "utils/utils_cleaner.h"
-#include "utils/utils_cache_line.h"
-#include "utils/utils_generator.h"
-#include "utils/utils_parallelize.h"
-#include "concurrency/ocf_concurrency.h"
-#include "mngt/ocf_mngt_common.h"
-#include "engine/engine_zero.h"
-#include "ocf_cache_priv.h"
-#include "ocf_request.h"
-#include "engine/engine_common.h"
+#include "../utils/utils_cleaner.h"
+#include "../utils/utils_cache_line.h"
+#include "../utils/utils_generator.h"
+#include "../utils/utils_parallelize.h"
+#include "../concurrency/ocf_concurrency.h"
+#include "../mngt/ocf_mngt_common.h"
+#include "../engine/engine_zero.h"
+#include "../ocf_cache_priv.h"
+#include "../ocf_request.h"
+#include "../engine/engine_common.h"
 
 // DEBUG PROFILING
 #ifndef OCF_LFU_DEBUG_PROFILE

@@ -30,7 +30,7 @@
 #include "../concurrency/ocf_metadata_concurrency.h"
 // #include "../ocf_lru.h"
 // #include "../ocf_lfu.h"
-#include "../ocf_eviction_ops.h"
+#include "../eviction/ocf_eviction_ops.h"
 #include "../ocf_ctx_priv.h"
 #include "../cleaning/cleaning.h"
 #include "../promotion/ops.h"

@@ -6,7 +6,7 @@
 #ifndef EVICTION_OPS_H_
 #define EVICTION_OPS_H_
 
-#include "metadata/metadata.h"
+#include "../metadata/metadata.h"
 
 struct ocf_eviction_policy {
 	ocf_cache_t owner;

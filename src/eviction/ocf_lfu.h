@@ -3,7 +3,7 @@
 #ifndef OCF_LFU_H_
 #define OCF_LFU_H_
 
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_eviction.h"
 
 #define MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)

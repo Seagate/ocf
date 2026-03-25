@@ -1,7 +1,7 @@
 #include "ocf_eviction.h"
 #include "ocf_eviction_ops.h"
-#include "ocf_request.h"
-#include "ocf_space.h"
+#include "../ocf_request.h"
+#include "../ocf_space.h"
 #include "ocf_lfu.h"
 #include "ocf_lru.h"
 
