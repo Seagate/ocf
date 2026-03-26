@@ -10,6 +10,7 @@
  * ocf_lfu_add
  * ocf_lfu_remove
  * add_to_list
+ * remove_from_list
  * add_to_freq_bucket
  * remove_from_freq_bucket
  * ocf_lfu_increment
@@ -28,25 +29,25 @@
 #include <cmocka.h>
 #include "print_desc.h"
 
-#include "ocf_space.h"
-#include "eviction/ocf_lfu.h"
-#include "utils/utils_cleaner.h"
-#include "utils/utils_cache_line.h"
-#include "utils/utils_generator.h"
-#include "utils/utils_parallelize.h"
-#include "concurrency/ocf_concurrency.h"
-#include "mngt/ocf_mngt_common.h"
-#include "engine/engine_zero.h"
+#include "../ocf_space.h"
+#include "ocf_lfu.h"
+#include "../utils/utils_cleaner.h"
+#include "../utils/utils_cache_line.h"
+#include "../utils/utils_generator.h"
+#include "../utils/utils_parallelize.h"
+#include "../concurrency/ocf_concurrency.h"
+#include "../mngt/ocf_mngt_common.h"
+#include "../engine/engine_zero.h"
 #include "ocf_cache_priv.h"
 #include "ocf_request.h"
-#include "engine/engine_common.h"
+#include "../engine/engine_common.h"
 
 #include "eviction/ocf_lfu.c/lfu_generated_wraps.c"
 
 #define META_COUNT 128
 
 static struct ocf_lfu_meta meta[META_COUNT];
-static struct ocf_lfu_list freq_buckets[MAX_FREQ];
+static struct ocf_lfu_list freq_bucket_lists[MAX_FREQ];
 
 /** Wrappers */
 
@@ -64,7 +65,7 @@ struct ocf_lfu_meta *__wrap_ocf_metadata_get_lfu(ocf_cache_t cache, ocf_cache_li
 struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t freq, bool clean) 
 {
 	assert(freq < MAX_FREQ);
-	return &freq_buckets[freq];
+	return &freq_bucket_lists[freq];
 }
 
 // bool __wrap_metadata_test_dirty(struct ocf_cache *cache,
@@ -73,14 +74,14 @@ struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t fre
 // 	return false;
 // }
 
-static const unsigned END_MARKER = -1;
+static const unsigned END_MARKER = (uint32_t)-1;
 
 /** Setup */
-static int setup_freq_buckets(void **state) {
+static int setup_freq_bucket_lists(void **state) {
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
     return 0; 
 }
@@ -120,9 +121,9 @@ static void _lfu_init_test02(void **state)
 		assert_int_equal(meta_item->freq, 0);
 		
 		// Check list structure
-		assert_int_equal(freq_buckets[0].num_nodes, i);
-		assert_int_equal(freq_buckets[0].head, i);
-		assert_int_equal(freq_buckets[0].tail, 1);
+		assert_int_equal(freq_bucket_lists[0].num_nodes, i);
+		assert_int_equal(freq_bucket_lists[0].head, i);
+		assert_int_equal(freq_bucket_lists[0].tail, 1);
 	}
 }
 
@@ -141,17 +142,17 @@ static void _lfu_init_test03(void **state)
 	// Start popping things out of the cache
 	for (int i = 8; i >= 1; i--) {
 		// Since we're not increasing frequency, check the 0 bucket only
-		assert_int_equal(freq_buckets[0].num_nodes, i);
-		assert_int_equal(freq_buckets[0].head, i);
-		assert_int_equal(freq_buckets[0].tail, 1);
+		assert_int_equal(freq_bucket_lists[0].num_nodes, i);
+		assert_int_equal(freq_bucket_lists[0].head, i);
+		assert_int_equal(freq_bucket_lists[0].tail, 1);
 
 		ocf_lfu_remove(NULL, i);
 	}
 
 	// Check that Freq 0 list is completely empty
-	assert_int_equal(freq_buckets[0].num_nodes, 0);
-	assert_int_equal(freq_buckets[0].head, END_MARKER);
-	assert_int_equal(freq_buckets[0].tail, END_MARKER);
+	assert_int_equal(freq_bucket_lists[0].num_nodes, 0);
+	assert_int_equal(freq_bucket_lists[0].head, END_MARKER);
+	assert_int_equal(freq_bucket_lists[0].tail, END_MARKER);
 }
 
 /** Test increment frequency */
@@ -174,13 +175,13 @@ static void _lfu_init_test04(void **state)
 	// Check if buckets were updated correctly
 
 	// 1st bucket should have things
-	assert_int_equal(freq_buckets[1].num_nodes, 1);
-	assert_int_equal(freq_buckets[1].head, cline);
+	assert_int_equal(freq_bucket_lists[1].num_nodes, 1);
+	assert_int_equal(freq_bucket_lists[1].head, cline);
 
 	// 0th bucket should be empty
-	assert_int_equal(freq_buckets[0].num_nodes, 0);
-	assert_int_equal(freq_buckets[0].head, END_MARKER);
-	assert_int_equal(freq_buckets[0].tail, END_MARKER);
+	assert_int_equal(freq_bucket_lists[0].num_nodes, 0);
+	assert_int_equal(freq_bucket_lists[0].head, END_MARKER);
+	assert_int_equal(freq_bucket_lists[0].tail, END_MARKER);
 }
 
 /** Test increment frequency max */
@@ -204,8 +205,9 @@ static void _lfu_init_test05(void **state)
 	assert_int_equal(meta[cline].freq, MAX_FREQ - 1);
 	
 	// Check if buckets were updated correctly
-	assert_int_equal(freq_buckets[MAX_FREQ - 1].num_nodes, 1);
-	assert_int_equal(freq_buckets[MAX_FREQ - 1].head, cline);
+	assert_int_equal(freq_bucket_lists[MAX_FREQ - 1].num_nodes, 1);
+	// Due to optimization, it doesn't need to be moved to head:
+	// assert_int_equal(freq_bucket_lists[MAX_FREQ - 1].head, cline);
 }
 
 static void _lfu_init_test06(void **state)
@@ -231,37 +233,37 @@ static void _lfu_init_test06(void **state)
     ocf_lfu_increment(NULL, 6);
 
     // Initial state verification
-    assert_int_equal(freq_buckets[2].num_nodes, 1);
-    assert_int_equal(freq_buckets[2].head, 8);
-    assert_int_equal(freq_buckets[1].num_nodes, 2);
-    assert_int_equal(freq_buckets[1].head, 6);
-    assert_int_equal(freq_buckets[0].num_nodes, 5);
-    assert_int_equal(freq_buckets[0].head, 5);
+    assert_int_equal(freq_bucket_lists[2].num_nodes, 1);
+    assert_int_equal(freq_bucket_lists[2].head, 8);
+    assert_int_equal(freq_bucket_lists[1].num_nodes, 2);
+    assert_int_equal(freq_bucket_lists[1].head, 6);
+    assert_int_equal(freq_bucket_lists[0].num_nodes, 5);
+    assert_int_equal(freq_bucket_lists[0].head, 5);
 
     // Remove from a bucket with multiple items (cline 7 from freq 1)
     ocf_lfu_remove(NULL, 7);
-    assert_int_equal(freq_buckets[1].num_nodes, 1);
-    assert_int_equal(freq_buckets[1].head, 6);
-    assert_int_equal(freq_buckets[1].tail, 6);
+    assert_int_equal(freq_bucket_lists[1].num_nodes, 1);
+    assert_int_equal(freq_bucket_lists[1].head, 6);
+    assert_int_equal(freq_bucket_lists[1].tail, 6);
 
     // Remove the last item from a bucket (cline 8 from freq 2)
     ocf_lfu_remove(NULL, 8);
-    assert_int_equal(freq_buckets[2].num_nodes, 0);
-    assert_int_equal(freq_buckets[2].head, END_MARKER);
+    assert_int_equal(freq_bucket_lists[2].num_nodes, 0);
+    assert_int_equal(freq_bucket_lists[2].head, END_MARKER);
 
     // Remove from the head of bucket 0
     ocf_lfu_remove(NULL, 5);
-    assert_int_equal(freq_buckets[0].num_nodes, 4);
-    assert_int_equal(freq_buckets[0].head, 4);
+    assert_int_equal(freq_bucket_lists[0].num_nodes, 4);
+    assert_int_equal(freq_bucket_lists[0].head, 4);
 
     // Remove from the tail of bucket 0
     ocf_lfu_remove(NULL, 1);
-    assert_int_equal(freq_buckets[0].num_nodes, 3);
-    assert_int_equal(freq_buckets[0].tail, 2);
+    assert_int_equal(freq_bucket_lists[0].num_nodes, 3);
+    assert_int_equal(freq_bucket_lists[0].tail, 2);
 
     // Remove from the middle of bucket 0
     ocf_lfu_remove(NULL, 3);
-    assert_int_equal(freq_buckets[0].num_nodes, 2);
+    assert_int_equal(freq_bucket_lists[0].num_nodes, 2);
     assert_int_equal(meta[4].next, 2);
     assert_int_equal(meta[2].prev, 4);
 }
@@ -269,12 +271,12 @@ static void _lfu_init_test06(void **state)
 int main(void)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test_setup(_lfu_init_test01, setup_freq_buckets),
-		cmocka_unit_test_setup(_lfu_init_test02, setup_freq_buckets),
-		cmocka_unit_test_setup(_lfu_init_test03, setup_freq_buckets),
-		cmocka_unit_test_setup(_lfu_init_test04, setup_freq_buckets),
-		cmocka_unit_test_setup(_lfu_init_test05, setup_freq_buckets),
-		cmocka_unit_test_setup(_lfu_init_test06, setup_freq_buckets)
+		cmocka_unit_test_setup(_lfu_init_test01, setup_freq_bucket_lists),
+		cmocka_unit_test_setup(_lfu_init_test02, setup_freq_bucket_lists),
+		cmocka_unit_test_setup(_lfu_init_test03, setup_freq_bucket_lists),
+		cmocka_unit_test_setup(_lfu_init_test04, setup_freq_bucket_lists),
+		cmocka_unit_test_setup(_lfu_init_test05, setup_freq_bucket_lists),
+		cmocka_unit_test_setup(_lfu_init_test06, setup_freq_bucket_lists)
 	};
 
 	print_message("Unit test for lfu\n");

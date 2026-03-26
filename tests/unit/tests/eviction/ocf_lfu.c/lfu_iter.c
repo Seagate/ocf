@@ -12,7 +12,9 @@
  * lfu_iter_eviction_init
  * lfu_iter_eviction_next
  * lfu_iter_cleaning_next
+ * add_to_list
  * add_to_freq_bucket
+ * remove_from_list
  * remove_from_freq_bucket
  * </functions_to_leave>
  */
@@ -28,27 +30,27 @@
 #include <cmocka.h>
 #include "print_desc.h"
 
-#include "ocf_space.h"
-#include "eviction/ocf_lfu.h"
-#include "utils/utils_cleaner.h"
-#include "utils/utils_cache_line.h"
-#include "utils/utils_generator.h"
-#include "utils/utils_parallelize.h"
-#include "concurrency/ocf_concurrency.h"
-#include "mngt/ocf_mngt_common.h"
-#include "engine/engine_zero.h"
+#include "../ocf_space.h"
+#include "ocf_lfu.h"
+#include "../utils/utils_cleaner.h"
+#include "../utils/utils_cache_line.h"
+#include "../utils/utils_generator.h"
+#include "../utils/utils_parallelize.h"
+#include "../concurrency/ocf_concurrency.h"
+#include "../mngt/ocf_mngt_common.h"
+#include "../engine/engine_zero.h"
 #include "ocf_cache_priv.h"
 #include "ocf_request.h"
-#include "engine/engine_common.h"
+#include "../engine/engine_common.h"
 
 #include "eviction/ocf_lfu.c/lfu_iter_generated_wraps.c"
 
 #define META_COUNT 2500
 
 static struct ocf_lfu_meta meta[META_COUNT];
-static struct ocf_lfu_list freq_buckets[MAX_FREQ];
+static struct ocf_lfu_list freq_bucket_lists[MAX_FREQ];
 
-static const unsigned END_MARKER = -1;
+static const unsigned END_MARKER = (uint32_t)-1;
 
 /** WRAPPERS */
 
@@ -66,7 +68,7 @@ struct ocf_lfu_meta *__wrap_ocf_metadata_get_lfu(ocf_cache_t cache, ocf_cache_li
 struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t freq, bool clean) 
 {
 	assert(freq < MAX_FREQ);
-	return &freq_buckets[freq];
+	return &freq_bucket_lists[freq];
 }
 
 bool __wrap_ocf_cache_line_try_lock_rd(struct ocf_cache_line_concurrency *c,
@@ -96,15 +98,15 @@ static void lfu_iter_eviction_next_test01(void **state)
 {
 	// Setup lists
 	for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup variables
 	struct ocf_lfu_iter iter;
 	ocf_cache_line_t cache_line, expected_cache_line;
-	expected_cache_line = -1;
+	expected_cache_line = END_MARKER;
 
 	// Initialize eviction iterator
 	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
@@ -115,7 +117,7 @@ static void lfu_iter_eviction_next_test01(void **state)
 		
 		// Assert that you cannot find a cache line
 		assert_int_equal(cache_line, expected_cache_line);
-	} while (cache_line != -1);
+	} while (cache_line != END_MARKER);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ);
@@ -129,9 +131,9 @@ static void lfu_iter_eviction_next_test02(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -163,7 +165,7 @@ static void lfu_iter_eviction_next_test02(void **state)
 		remove_from_freq_bucket(i, NULL, i, true);
 
 		i++;
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -177,9 +179,9 @@ static void lfu_iter_eviction_next_test03(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -224,7 +226,7 @@ static void lfu_iter_eviction_next_test03(void **state)
 			i++;
 			num_elements = 1 + i / (MAX_FREQ / 4);
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -238,9 +240,9 @@ static void lfu_iter_eviction_next_test04(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	ocf_cache_line_t cline_counter = 0;
@@ -286,7 +288,7 @@ static void lfu_iter_eviction_next_test04(void **state)
 			i++;
 			num_elements = 1 + (i % 5);
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -299,9 +301,9 @@ static void lfu_iter_eviction_next_test05(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -353,7 +355,7 @@ static void lfu_iter_eviction_next_test05(void **state)
 			i++;
 			num_elements = i / (MAX_FREQ / 4);
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -366,9 +368,9 @@ static void lfu_iter_eviction_next_test06(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -421,7 +423,7 @@ static void lfu_iter_eviction_next_test06(void **state)
 			i++;
 			num_elements = i % 5;
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -434,9 +436,9 @@ static void lfu_iter_eviction_next_test07(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -485,7 +487,7 @@ static void lfu_iter_eviction_next_test07(void **state)
 			j = 0;
 			i++;
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -498,9 +500,9 @@ static void lfu_iter_eviction_next_test08(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Setup lists
@@ -545,7 +547,7 @@ static void lfu_iter_eviction_next_test08(void **state)
             i++;
             num_elements = i + 1;
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -558,9 +560,9 @@ static void lfu_iter_eviction_next_test09(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Setup lists
@@ -612,7 +614,7 @@ static void lfu_iter_eviction_next_test09(void **state)
             i++;
             num_elements = i * 4;
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -625,9 +627,9 @@ static void lfu_iter_eviction_next_test10(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Setup lists
@@ -679,7 +681,7 @@ static void lfu_iter_eviction_next_test10(void **state)
             i++;
             num_elements = i * 4 + 1;
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -690,15 +692,15 @@ static void lfu_iter_eviction_next_test11(void **state)
 {
 	// Setup lists
 	for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup variables
 	struct ocf_lfu_iter iter;
 	ocf_cache_line_t cache_line, expected_cache_line;
-	expected_cache_line = -1;
+	expected_cache_line = END_MARKER;
 
 	// Initialize eviction iterator
 	lfu_iter_eviction_init(&iter, NULL, NULL, 0, NULL);
@@ -709,7 +711,7 @@ static void lfu_iter_eviction_next_test11(void **state)
 		
 		// Assert that you cannot find a cache line
 		assert_int_equal(cache_line, expected_cache_line);
-	} while (cache_line != -1);
+	} while (cache_line != END_MARKER);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ);
@@ -722,9 +724,9 @@ static void lfu_iter_eviction_next_test12(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Setup lists
@@ -753,13 +755,13 @@ static void lfu_iter_eviction_next_test12(void **state)
 		expected_cache_line = (i - 4 + MAX_FREQ) % MAX_FREQ;
 		
 		// Assert that you find the correct cache line for each frequency bucket
-		// assert_int_equal(cache_line, expected_cache_line);
-		// assert_int_equal(iter.current_freq, i);
+		assert_int_equal(cache_line, expected_cache_line);
+		assert_int_equal(iter.current_freq, i);
 
-		remove_from_freq_bucket(i, NULL, i, true);
+		remove_from_freq_bucket(i, NULL, expected_cache_line, true);
 
 		i++;
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -774,9 +776,9 @@ static void lfu_iter_eviction_next_test13(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Pre-calculate the starting cache line for each original bucket
@@ -835,7 +837,7 @@ static void lfu_iter_eviction_next_test13(void **state)
             num_elements = 1 + original_bucket / (MAX_FREQ / 4);
             expected_cache_line = start_clines[original_bucket];
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -850,9 +852,9 @@ static void lfu_iter_eviction_next_test14(void **state)
 	memset(meta, 0, sizeof(meta)); // Metadata
 	// Lists
 	for (int i = 0; i < MAX_FREQ; i++) { 
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
 	// Pre-calculate the starting cache line for each original bucket
@@ -912,7 +914,7 @@ static void lfu_iter_eviction_next_test14(void **state)
             num_elements = 1 + (original_bucket % 5);
             expected_cache_line = start_clines[original_bucket];
 		}
-	} while (cache_line != -1 && i < MAX_FREQ);
+	} while (cache_line != END_MARKER && i < MAX_FREQ);
 
 	// Ensure all freq buckets has been visited
 	assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -925,9 +927,9 @@ static void lfu_iter_eviction_next_test15(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -995,7 +997,7 @@ static void lfu_iter_eviction_next_test15(void **state)
             num_elements = original_bucket / (MAX_FREQ / 4);
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -1008,9 +1010,9 @@ static void lfu_iter_eviction_next_test16(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -1078,7 +1080,7 @@ static void lfu_iter_eviction_next_test16(void **state)
             num_elements = original_bucket % 5;
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -1091,9 +1093,9 @@ static void lfu_iter_eviction_next_test17(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -1161,7 +1163,7 @@ static void lfu_iter_eviction_next_test17(void **state)
             num_elements = original_bucket;
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -1174,9 +1176,9 @@ static void lfu_iter_eviction_next_test18(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -1235,7 +1237,7 @@ static void lfu_iter_eviction_next_test18(void **state)
             num_elements = original_bucket + 1;
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -1248,9 +1250,9 @@ static void lfu_iter_eviction_next_test19(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -1318,7 +1320,7 @@ static void lfu_iter_eviction_next_test19(void **state)
             num_elements = original_bucket * 4;
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);
@@ -1331,9 +1333,9 @@ static void lfu_iter_eviction_next_test20(void **state)
     memset(meta, 0, sizeof(meta)); // Metadata
     // Lists
     for (int i = 0; i < MAX_FREQ; i++) {
-        freq_buckets[i].head = END_MARKER;
-        freq_buckets[i].tail = END_MARKER;
-        freq_buckets[i].num_nodes = 0;
+        freq_bucket_lists[i].head = END_MARKER;
+        freq_bucket_lists[i].tail = END_MARKER;
+        freq_bucket_lists[i].num_nodes = 0;
     }
 
     // Pre-calculate the starting cache line for each original bucket
@@ -1392,7 +1394,7 @@ static void lfu_iter_eviction_next_test20(void **state)
             num_elements = original_bucket * 4 + 1;
             expected_cache_line = start_clines[original_bucket];
         }
-    } while (cache_line != -1 && i < MAX_FREQ);
+    } while (cache_line != END_MARKER && i < MAX_FREQ);
 
     // Ensure all freq buckets has been visited
     assert_int_equal(iter.current_freq, MAX_FREQ - 1);

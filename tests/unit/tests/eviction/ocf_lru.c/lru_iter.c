@@ -33,7 +33,7 @@
 #include <cmocka.h>
 #include "print_desc.h"
 
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_lru.h"
 #include "../utils/utils_cleaner.h"
 #include "../utils/utils_cache_line.h"
