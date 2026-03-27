@@ -2414,7 +2414,6 @@ static void _ocf_mngt_cache_deinit_services(ocf_cache_t cache)
 
 	__deinit_cleaning_policy(cache);
 	__deinit_promotion_policy(cache);
-	__deinit_eviction_policy(cache);
 }
 
 static void ocf_mngt_cache_stop_deinit_services(ocf_pipeline_t pipeline,
@@ -2516,6 +2515,9 @@ static void ocf_mngt_cache_deinit_metadata(ocf_pipeline_t pipeline,
 {
 	struct ocf_mngt_cache_unplug_context *context = priv;
 	ocf_cache_t cache = context->cache;
+
+	/* Deinit eviction policy first */ 
+	__deinit_eviction_policy(cache);
 
 	ocf_metadata_deinit_variable_size(cache);
 	ocf_concurrency_deinit(cache);
