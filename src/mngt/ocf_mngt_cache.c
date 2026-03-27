@@ -2002,7 +2002,6 @@ static void _ocf_mngt_init_promotion(ocf_pipeline_t pipeline,
 	ocf_pipeline_next(pipeline);
 }
 
-// TODO: Use this to init metadata as well??
 static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 									void *priv, ocf_pipeline_arg_t arg)
 {

@@ -54,4 +54,6 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 void ocf_lfu_populate(ocf_cache_t cache,
 		ocf_eviction_populate_end_t cmpl, void *priv);
 
+int ocf_lfu_restore_runtime(ocf_cache_t cache);
+
 #endif

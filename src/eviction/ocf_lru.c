@@ -1312,6 +1312,13 @@ void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
 // 	struct ocf_lru_list *list;
 // }
 
+/**
+ * Functions to restore metadata from flushed data on clean shutdown
+ */
+
+ /**
+  * @brief Reconstruct metadata for a cline from flushed data
+  */
 static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	struct ocf_lru_meta *node, *next_node = NULL, *prev_node = NULL;
@@ -1421,6 +1428,9 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	return 0;
 }
 
+ /**
+  * @brief Restore runtime information from flushed data
+  */
 int ocf_lru_restore_runtime(ocf_cache_t cache)
 {
 	ocf_cache_line_t cline;

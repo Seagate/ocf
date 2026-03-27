@@ -40,7 +40,8 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
         .dirty_cline = ocf_lfu_dirty_cline, 
         .clean_cline = ocf_lfu_clean_cline, 
         .clean = ocf_lfu_clean,
-        .populate = ocf_lfu_populate
+        .populate = ocf_lfu_populate,
+        .restore_runtime = ocf_lfu_restore_runtime
     }
 };
 
