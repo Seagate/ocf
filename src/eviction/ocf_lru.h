@@ -46,4 +46,6 @@ void ocf_lru_restore(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lru_populate(ocf_cache_t cache,
 		ocf_eviction_populate_end_t cmpl, void *priv);
 
+int ocf_lru_restore_runtime(ocf_cache_t cache);
+
 #endif

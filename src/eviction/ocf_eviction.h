@@ -51,4 +51,6 @@ void ocf_eviction_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 void ocf_eviction_populate(ocf_cache_t cache,
 		ocf_eviction_populate_end_t cmpl, void *priv);
 
+int ocf_eviction_restore_runtime(ocf_cache_t cache);
+
 #endif /* EVICTION_H_ */

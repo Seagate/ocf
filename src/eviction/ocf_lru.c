@@ -1269,3 +1269,178 @@ void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
 	list = ocf_lru_get_list(&cache->free, lru_list, true);
 	add_lru_head_nobalance(cache, list, cline);
 }
+
+
+/**
+ * Restore metadata on load
+ */
+
+// static int ocf_lru_restore_validate_list(struct ocf_lru_list *list)
+// {
+// 	if (!list->num_nodes) {
+// 		if (list->head != end_marker)
+// 			return -OCF_ERR_INVAL;
+// 		if (list->tail != end_marker)
+// 			return -OCF_ERR_INVAL;
+// 		if (list->last_hot != end_marker)
+// 			return -OCF_ERR_INVAL;
+// 		if (list->num_hot != 0)
+// 			return -OCF_ERR_INVAL;
+// 		return 0;
+// 	}
+
+// 	if (list->head == end_marker || list->tail == end_marker)
+// 		return -OCF_ERR_INVAL;
+
+// 	if (list->num_hot > list->num_nodes)
+// 		return -OCF_ERR_INVAL;
+
+// 	if (list->track_hot && list->num_hot && list->last_hot == end_marker)
+// 		return -OCF_ERR_INVAL;
+
+// 	if (!list->track_hot) {
+// 		if (list->num_hot != 0)
+// 			return -OCF_ERR_INVAL;
+// 		if (list->last_hot != end_marker)
+// 			return -OCF_ERR_INVAL;
+// 	}
+
+// 	return 0;
+// }
+
+// static int ocf_lru_restore_validate(ocf_cache_t cache) {
+// 	struct ocf_lru_list *list;
+// }
+
+static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+{
+	struct ocf_lru_meta *node, *next_node = NULL, *prev_node = NULL;
+	struct ocf_lru_list *list;
+	struct ocf_part *part;
+	ocf_core_id_t core_id;
+	uint64_t core_line;
+	ocf_part_id_t part_id;
+	bool dirty, valid;
+
+	ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
+
+	if (!ocf_metadata_check(cache, cline) || core_id > OCF_CORE_MAX) {
+		// ocf_cache_log(cache, log_err,
+		// 	"[ocf_lru_restore_cline] invalid metadata: cline=%u core_id=%u\n",
+		// 	cline, core_id);
+		return -OCF_ERR_INVAL;
+	}
+
+	valid = metadata_test_valid_any(cache, cline);
+	node = ocf_metadata_get_lru(cache, cline);
+
+	if (!valid || core_id == OCF_CORE_MAX) { // If cline is free, put into free list
+		part = &cache->free;
+		list = ocf_lru_get_list(part, cline % OCF_NUM_LRU_LISTS, true);
+		env_atomic_inc(&cache->free.runtime->curr_size);
+
+		if (node->hot) {
+			// ocf_cache_log(cache, log_err,
+			// 	"[restore] free line marked hot: cline=%u prev=%u next=%u\n",
+			// 	cline, node->prev, node->next);
+			return -OCF_ERR_INVAL;
+		}
+	} else {
+		part_id = ocf_metadata_get_partition_id(cache, cline);
+
+		if (part_id > OCF_USER_IO_CLASS_MAX) {
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]part_id = %u > %d", part_id, OCF_USER_IO_CLASS_MAX);
+			return -OCF_ERR_INVAL;
+		}	
+			
+		dirty = metadata_test_dirty(cache, cline);
+
+		part = &cache->user_parts[part_id].part;
+		list = ocf_lru_get_list(part, cline % OCF_NUM_LRU_LISTS, !dirty);
+		env_atomic_inc(&part->runtime->curr_size);
+	}
+
+	if (node->prev != end_marker)
+		prev_node = ocf_metadata_get_lru(cache, node->prev);
+
+	if (node->next != end_marker)
+		next_node = ocf_metadata_get_lru(cache, node->next);
+
+	// Check neighbor consistency
+	if (prev_node && prev_node->next != cline) {
+		// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]prev neighbor is inconsistent: prev_node->next = %u", prev_node->next);
+		return -OCF_ERR_INVAL;
+	}
+		
+
+	if (next_node && next_node->prev != cline) {
+		// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]next neighbor is inconsistent: next_node->prev = %u", next_node->prev);
+		return -OCF_ERR_INVAL;
+	}
+		
+	list->num_nodes++;
+
+	if (node->prev == end_marker) {
+		if (list->head != end_marker) {
+			// struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not head. head = %u", list->head);
+
+			// ocf_cache_log(cache, log_err,
+			// 	"[ocf_lru_restore_cline] existing head meta: cline=%u prev=%u next=%u hot=%u\n",
+			// 	list->head, head_node->prev, head_node->next, head_node->hot);
+			return -OCF_ERR_INVAL;
+		}
+			
+		list->head = cline;
+	}
+
+	if (node->next == end_marker) {
+		if (list->tail != end_marker) {
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not tail. tail = %u", list->tail);
+			return -OCF_ERR_INVAL;
+		}
+		list->tail = cline;
+	}
+
+	// Restore hotness information
+	if (list->track_hot && node->hot) {
+		list->num_hot++;
+
+		if (node->next == end_marker ||
+		    !ocf_metadata_get_lru(cache, node->next)->hot) {
+			if (list->last_hot != end_marker) {
+				ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]duplicate last_hot: cline=%u last_hot=%u "
+					"part=%u clean=%d lru_idx=%u\n",
+					cline, list->last_hot, part_id, !dirty, cline % OCF_NUM_LRU_LISTS);
+				return -OCF_ERR_INVAL;
+			}
+			list->last_hot = cline;
+		}
+	}
+
+	return 0;
+}
+
+int ocf_lru_restore_runtime(ocf_cache_t cache)
+{
+	ocf_cache_line_t cline;
+	ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
+	int ret;
+
+	// Reset runtime
+	ocf_part_id_t part_id;
+
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
+		ocf_lru_init(cache, &cache->user_parts[part_id].part);
+
+	ocf_lru_init(cache, &cache->free);
+
+	// Restore clines
+	for (cline = 0; cline < entries; cline++) {
+		ret = ocf_lru_restore_cline(cache, cline);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
+}

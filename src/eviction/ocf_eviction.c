@@ -21,7 +21,9 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
         .dirty_cline = ocf_lru_dirty_cline,
         .clean_cline = ocf_lru_clean_cline,
         .clean = ocf_lru_clean,
-        .populate = ocf_lru_populate},
+        .populate = ocf_lru_populate,
+        .restore_runtime = ocf_lru_restore_runtime
+    },
 
     [ocf_eviction_lfu] = {
         .name = "lfu", 
@@ -66,9 +68,9 @@ int ocf_eviction_init_part(ocf_cache_t cache, struct ocf_part *part) {
     if (ocf_eviction_policies[type].init_part)
     {
         return ocf_eviction_policies[type].init_part(cache, part);
-    } else {
-        return 1;
-    }
+    } 
+    
+    return 1;
 }
 
 void ocf_eviction_deinit_part(ocf_cache_t cache, struct ocf_part *part) {
@@ -161,10 +163,8 @@ uint32_t ocf_eviction_req_clines(struct ocf_request *req,
     {
         return ocf_eviction_policies[type].req_clines(req, src_part, cline_no);
     }
-    else
-    {
-        return 0;
-    }
+
+    return 1;
 }
 
 void ocf_eviction_repart(ocf_cache_t cache, ocf_cache_line_t cline,
@@ -230,4 +230,16 @@ void ocf_eviction_populate(ocf_cache_t cache,
     {
         ocf_eviction_policies[type].populate(cache, cmpl, priv);
     }
+}
+
+int ocf_eviction_restore_runtime(ocf_cache_t cache) {
+            ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (ocf_eviction_policies[type].restore_runtime)
+    {
+        return ocf_eviction_policies[type].restore_runtime(cache);
+    }
+    return -1;
 }

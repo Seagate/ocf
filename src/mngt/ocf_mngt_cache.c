@@ -244,30 +244,29 @@ static int __init_eviction_policy(ocf_cache_t cache) {
 	}
 
 	ret = ocf_eviction_init_part(cache, &cache->free);
+	if(ret)
+		return ret;
+
+	ret = ocf_eviction_init_part(cache, &cache->free_detached);
 	return ret;
 }
 
-static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
-								 ocf_pipeline_arg_t arg)
-{
-	struct ocf_init_metadata_context *context = priv;
-	ocf_cache_t cache = context->cache;
-	int ret;
+// static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
+// 								 ocf_pipeline_arg_t arg)
+// {
+// 	struct ocf_init_metadata_context *context = priv;
+// 	ocf_cache_t cache = context->cache;
+// 	int ret;
 
-	ret = __init_eviction_policy(cache);
+// 	ret = __init_eviction_policy(cache);
 
-	ret = ocf_eviction_init_part(cache, &cache->free);
-	if (ret)
-		OCF_PL_FINISH_RET(pipeline, ret);
+// 	if (ret)
+// 		OCF_PL_FINISH_RET(pipeline, ret);
 
-	ret = ocf_eviction_init(cache, &cache->free_detached);
-	if (ret)
-		OCF_PL_FINISH_RET(pipeline, ret);
-		
-	ocf_cache_log(cache, log_info, "[_init_parts_attached] Initialized successfully!\n");
+// 	ocf_cache_log(cache, log_info, "[_init_parts_attached] Initialized successfully!\n");
 
-	ocf_pipeline_next(pipeline);
-}
+// 	ocf_pipeline_next(pipeline);
+// }
 
 static void __deinit_eviction_policy(ocf_cache_t cache) {
 	ocf_part_id_t part_id;
@@ -406,7 +405,7 @@ struct ocf_pipeline_properties ocf_init_attached_recovery_props = {
 	.steps = {
 		OCF_PL_STEP(ocf_metadata_init_hash_table),
 		OCF_PL_STEP(ocf_metadata_init_collision),
-		OCF_PL_STEP(_init_parts_attached),
+		// OCF_PL_STEP(_init_parts_attached),
 		OCF_PL_STEP(_reset_stats),
 		OCF_PL_STEP(_init_metadata_version),
 		OCF_PL_STEP_TERMINATOR(),
@@ -821,6 +820,7 @@ static void _ocf_mngt_load_rebuild_metadata(ocf_pipeline_t pipeline,
 {
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
+	int ret;
 
 	if (context->metadata.shutdown_status != ocf_metadata_clean_shutdown)
 	{
@@ -829,6 +829,10 @@ static void _ocf_mngt_load_rebuild_metadata(ocf_pipeline_t pipeline,
 								  context);
 		return;
 	}
+
+	ret = ocf_eviction_restore_runtime(cache);
+	if (ret)
+		OCF_PL_FINISH_RET(pipeline, ret);
 
 	ocf_pipeline_next(pipeline);
 }
@@ -1510,7 +1514,7 @@ struct ocf_pipeline_properties ocf_init_metadata_pipeline_props = {
 	.steps = {
 		OCF_PL_STEP(ocf_metadata_init_hash_table),
 		OCF_PL_STEP(ocf_metadata_init_collision),
-		OCF_PL_STEP(_init_parts_attached),
+		// OCF_PL_STEP(_init_parts_attached),
 		OCF_PL_STEP_TERMINATOR(),
 	},
 };
@@ -2004,8 +2008,14 @@ static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 {
 	struct ocf_cache_attach_context *context = priv;
 	ocf_cache_t cache = context->cache;
+	int ret;
 
 	cache->eviction_policy = cache->conf_meta->eviction_policy_type;
+
+	ret = __init_eviction_policy(cache);
+
+	if (ret)
+		OCF_PL_FINISH_RET(pipeline, ret);
 
 	ocf_cache_log(cache, log_debug,
 					  "[_ocf_mngt_init_eviction] cache->eviction_policy = %d\n", cache->eviction_policy);
@@ -2405,6 +2415,7 @@ static void _ocf_mngt_cache_deinit_services(ocf_cache_t cache)
 
 	__deinit_cleaning_policy(cache);
 	__deinit_promotion_policy(cache);
+	__deinit_eviction_policy(cache);
 }
 
 static void ocf_mngt_cache_stop_deinit_services(ocf_pipeline_t pipeline,

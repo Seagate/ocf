@@ -81,6 +81,9 @@ struct eviction_policy_ops {
 	void (*populate)(ocf_cache_t cache,
 			void (*cmpl)(void *priv, int error), void *priv);
 		/*!< Populate runtime eviction metadata from current cache state */
+
+	int (*restore_runtime)(ocf_cache_t cache);
+		/*!< Restore eviction runtime metadata on cache load */
 };
 
 extern struct eviction_policy_ops
