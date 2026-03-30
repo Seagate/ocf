@@ -7,7 +7,7 @@ import pytest
 
 
 from pyocf.types.data import Data, DataSeek
-from pyocf.types.cache import Cache, CacheMode
+from pyocf.types.cache import Cache, CacheMode, EvictionPolicy
 from pyocf.types.core import Core
 from pyocf.types.shared import CacheLineSize
 from pyocf.types.volume import RamVolume, Volume
@@ -18,12 +18,13 @@ from pyocf.types.io import IoDir
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
-def test_partial_hit_write(pyocf_ctx, cacheline_size, cache_mode):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_partial_hit_write(pyocf_ctx, cacheline_size, cache_mode, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(50))
 
     cache = Cache.start_on_device(
-        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode
+        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode, eviction_policy=eviction_policy
     )
     core = Core.using_device(core_device)
 
@@ -54,12 +55,13 @@ def test_partial_hit_write(pyocf_ctx, cacheline_size, cache_mode):
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
-def test_partial_hit_read(pyocf_ctx, cacheline_size, cache_mode):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_partial_hit_read(pyocf_ctx, cacheline_size, cache_mode, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(50))
 
     cache = Cache.start_on_device(
-        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode
+        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode, eviction_policy=eviction_policy
     )
     core = Core.using_device(core_device)
 
@@ -88,12 +90,13 @@ def test_partial_hit_read(pyocf_ctx, cacheline_size, cache_mode):
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", [CacheMode.WB, CacheMode.WO])
-def test_read_partial_hit_partial_invalidate_dirty(pyocf_ctx, cacheline_size, cache_mode):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_read_partial_hit_partial_invalidate_dirty(pyocf_ctx, cacheline_size, cache_mode, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(50))
 
     cache = Cache.start_on_device(
-        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode
+        cache_device, cache_line_size=cacheline_size, cache_mode=cache_mode, eviction_policy=eviction_policy
     )
     core = Core.using_device(core_device)
 
@@ -122,11 +125,12 @@ def test_read_partial_hit_partial_invalidate_dirty(pyocf_ctx, cacheline_size, ca
 
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
-def test_partial_hit_backfill(pyocf_ctx, cacheline_size):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_partial_hit_backfill(pyocf_ctx, cacheline_size, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(50))
 
-    cache = Cache.start_on_device(cache_device, cache_line_size=cacheline_size)
+    cache = Cache.start_on_device(cache_device, cache_line_size=cacheline_size, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
 
     queue = cache.get_default_queue()

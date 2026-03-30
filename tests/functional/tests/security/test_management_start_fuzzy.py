@@ -7,7 +7,7 @@ import logging
 
 import pytest
 
-from pyocf.types.cache import Cache, CacheMode, MetadataLayout, PromotionPolicy
+from pyocf.types.cache import Cache, CacheMode, MetadataLayout, PromotionPolicy, EvictionPolicy
 from pyocf.types.shared import OcfError, CacheLineSize
 from pyocf.types.volume import RamVolume
 from pyocf.utils import Size
@@ -118,4 +118,20 @@ def test_fuzzy_start_promotion_policy(pyocf_ctx, not_promotion_policy_randomize,
     with pytest.raises(OcfError, match="OCF_ERR_INVAL"):
         try_start_cache(
             cache_mode=cm, cache_line_size=cls, promotion_policy=not_promotion_policy_randomize
+        )
+
+@pytest.mark.security
+@pytest.mark.parametrize("cm", CacheMode)
+@pytest.mark.parametrize("cls", CacheLineSize)
+def test_fuzzy_start_eviction_policy(pyocf_ctx, not_eviction_policy_randomize):
+     """
+    Test whether it is impossible to start cache with invalid promotion policy
+    :param pyocf_ctx: basic pyocf context fixture
+    :param c_uint32_randomize: eviction policy to start with
+    :param cm: cache mode value to start cache with
+    :param cls: cache line size to start cache with
+    """
+    with pytest.raises(OcfError, match="OCF_ERR_INVAL"):
+        try_start_cache(
+            cache_mode=cm, cache_line_size=cls, eviction_policy=not_eviction_policy_randomize
         )

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pyocf.types.volume_cache import CacheVolume
 from pyocf.types.volume import RamVolume
-from pyocf.types.cache import Cache, CacheMetadataSegment, CacheMode
+from pyocf.types.cache import Cache, CacheMetadataSegment, CacheMode, EvictionPolicy
 from pyocf.utils import Size
 from pyocf.types.shared import CacheLineSize, OcfError, OcfErrorCode
 from pyocf.types.ctx import OcfCtx
@@ -42,7 +42,8 @@ logger = logging.getLogger(__name__)
     ],
 )
 @pytest.mark.parametrize("section", CacheMetadataSegment)
-def test_garbage_on_cache_exported_object(pyocf_ctx, cache_line_size, bs, io_size, section):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_garbage_on_cache_exported_object(pyocf_ctx, cache_line_size, bs, io_size, section, eviction_policy):
     num_jobs = 1
     qd = 64
 
@@ -50,7 +51,7 @@ def test_garbage_on_cache_exported_object(pyocf_ctx, cache_line_size, bs, io_siz
     cache_vol = RamVolume(vol_size)
     secondary_cache_volume = RamVolume(vol_size)
 
-    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cache_line_size)
+    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cache_line_size, eviction_policy=eviction_policy)
 
     cache.start_cache(init_default_io_queue=False)
 

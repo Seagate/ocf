@@ -12,6 +12,7 @@ from pyocf.types.cache import (
     Cache,
     CacheMode,
     CleaningPolicy,
+    EvictionPolicy
 )
 from pyocf.types.core import Core
 from pyocf.types.data import Data
@@ -29,12 +30,12 @@ from pyocf.rio import Rio, ReadWrite
 
 logger = logging.getLogger(__name__)
 
-
-def test_add_remove_core_detached_cache(pyocf_ctx):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_add_remove_core_detached_cache(pyocf_ctx, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(50))
 
-    cache = Cache(owner=pyocf_ctx)
+    cache = Cache(owner=pyocf_ctx, eviction_policy=eviction_policy)
     cache.start_cache()
     core = Core.using_device(core_device)
     cache.add_core(core)
@@ -42,11 +43,12 @@ def test_add_remove_core_detached_cache(pyocf_ctx):
     cache.stop()
 
 
-def test_attach_cache_twice(pyocf_ctx):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_attach_cache_twice(pyocf_ctx, eviction_policy):
     cache_device_1 = RamVolume(Size.from_MiB(50))
     cache_device_2 = RamVolume(Size.from_MiB(50))
 
-    cache = Cache(owner=pyocf_ctx)
+    cache = Cache(owner=pyocf_ctx, eviction_policy=eviction_policy)
     cache.start_cache()
 
     cache.attach_device(cache_device_1)
@@ -56,10 +58,10 @@ def test_attach_cache_twice(pyocf_ctx):
 
     cache.stop()
 
-
-def test_detach_cache_twice(pyocf_ctx):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_cache_twice(pyocf_ctx, eviction_policy):
     cache_device = RamVolume(Size.from_MiB(50))
-    cache = Cache.start_on_device(cache_device)
+    cache = Cache.start_on_device(cache_device, eviction_policy=eviction_policy)
 
     cache.detach_device()
 
@@ -130,15 +132,16 @@ def test_detach_cache_zero_superblock(pyocf_ctx):
 
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", [CacheMode.WB, CacheMode.WT, CacheMode.WO])
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
 @pytest.mark.parametrize("new_cache_size", [80, 120])
-def test_attach_different_size(pyocf_ctx, new_cache_size, mode: CacheMode, cls: CacheLineSize):
+def test_attach_different_size(pyocf_ctx, new_cache_size, mode: CacheMode, cls: CacheLineSize, eviction_policy: EvictionPolicy):
     """Start cache and add partition with limited occupancy. Fill partition with data,
     attach cache with different size and trigger IO. Verify if occupancy threshold is
     respected with both original and new cache device.
     """
     cache_device = RamVolume(Size.from_MiB(100))
     core_device = RamVolume(Size.from_MiB(100))
-    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
     cache.add_core(core)
 
