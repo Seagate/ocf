@@ -71,6 +71,9 @@ struct ocf_metadata_probe_status {
 
 	/** Probed name of cache instance */
 	char cache_name[OCF_CACHE_NAME_SIZE];
+
+	/** Probed eviction policy */
+	ocf_eviction_t eviction_policy;
 };
 
 /**

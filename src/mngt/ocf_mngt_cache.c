@@ -281,7 +281,7 @@ static void __deinit_eviction_policy(ocf_cache_t cache) {
 	// /* free cache-wide policy object, if you have one */
 	// ocf_eviction_deinit(cache);
 
-	cache->eviction_policy = ocf_eviction_default;
+	cache->eviction_policy = ocf_eviction_none;
 }
 
 static ocf_error_t __init_cleaning_policy(ocf_cache_t cache)
