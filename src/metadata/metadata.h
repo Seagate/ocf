@@ -219,6 +219,7 @@ struct ocf_metadata_load_properties {
 	uint8_t dirty_flushed;
 	ocf_cache_mode_t cache_mode;
 	ocf_cache_line_size_t line_size;
+	ocf_eviction_t eviction_policy;
 	char *cache_name;
 	bool cleaner_disabled;
 };

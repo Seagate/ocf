@@ -1438,6 +1438,7 @@ static void _ocf_mngt_load_read_properties_end(void *priv, int error,
 	context->metadata.line_size = properties->line_size;
 	context->metadata.cleaner_disabled = properties->cleaner_disabled;
 	cache->conf_meta->cache_mode = properties->cache_mode;
+	cache->conf_meta->eviction_policy_type = properties->eviction_policy;
 
 	ocf_pipeline_next(context->pipeline);
 }
@@ -3359,6 +3360,11 @@ static int _ocf_mngt_cache_validate_cfg(struct ocf_mngt_cache_config *cfg)
 
 	if (cfg->promotion_policy >= ocf_promotion_max ||
 		cfg->promotion_policy < 0)
+	{
+		return -OCF_ERR_INVAL;
+	}
+
+	if(cfg->eviction_policy >= ocf_eviction_max || cfg->eviction_policy < 0) 
 	{
 		return -OCF_ERR_INVAL;
 	}

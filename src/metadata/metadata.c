@@ -2038,6 +2038,7 @@ static void ocf_metadata_load_properties_cmpl(
 
 	properties.line_size = superblock->line_size;
 	properties.cache_mode = superblock->cache_mode;
+	properties.eviction_policy = superblock->eviction_policy_type;
 	properties.shutdown_status = superblock->clean_shutdown;
 	properties.dirty_flushed = superblock->dirty_flushed;
 	properties.cache_name = superblock->name;
