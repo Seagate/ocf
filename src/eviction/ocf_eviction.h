@@ -53,4 +53,13 @@ void ocf_eviction_populate(ocf_cache_t cache,
 
 int ocf_eviction_restore_runtime(ocf_cache_t cache);
 
+int ocf_metadata_actor(struct ocf_cache *cache,
+                       ocf_part_id_t part_id, ocf_core_id_t core_id,
+                       uint64_t start_byte, uint64_t end_byte,
+                       ocf_metadata_actor_t actor);
+
+static bool _is_cache_line_acting(struct ocf_cache *cache,
+                                  uint32_t cache_line, ocf_core_id_t core_id,
+                                  uint64_t start_line, uint64_t end_line);
+
 #endif /* EVICTION_H_ */
