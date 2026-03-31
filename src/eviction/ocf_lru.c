@@ -1336,7 +1336,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	if (!valid || core_id == OCF_CORE_NUM) { // If cline is free, put into free list
 		part = &cache->free;
-		list = ocf_lru_get_list(part, cline % OCF_NUM_LRU_LISTS, true);
+		list = ocf_lru_get_list(part, OCF_LRU_GET_LIST_INDEX(cline), true);
 		env_atomic_inc(&cache->free.runtime->curr_size);
 
 		if (node->hot) {
@@ -1356,7 +1356,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 		dirty = metadata_test_dirty(cache, cline);
 
 		part = &cache->user_parts[part_id].part;
-		list = ocf_lru_get_list(part, cline % OCF_NUM_LRU_LISTS, !dirty);
+		list = ocf_lru_get_list(part, OCF_LRU_GET_LIST_INDEX(cline), !dirty);
 		env_atomic_inc(&part->runtime->curr_size);
 	}
 
@@ -1382,7 +1382,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	if (node->prev == end_marker) {
 		if (list->head != end_marker) {
-			// struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
+			struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
 			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not head. head = %u", list->head);
 
 			// ocf_cache_log(cache, log_err,
@@ -1409,9 +1409,9 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 		if (node->next == end_marker ||
 		    !ocf_metadata_get_lru(cache, node->next)->hot) {
 			if (list->last_hot != end_marker) {
-				ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]duplicate last_hot: cline=%u last_hot=%u "
-					"part=%u clean=%d lru_idx=%u\n",
-					cline, list->last_hot, part_id, !dirty, cline % OCF_NUM_LRU_LISTS);
+				// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]duplicate last_hot: cline=%u last_hot=%u "
+				// 	"part=%u clean=%d lru_idx=%u\n",
+				// 	cline, list->last_hot, part_id, !dirty, OCF_LRU_GET_LIST_INDEX(cline));
 				return -OCF_ERR_INVAL;
 			}
 			list->last_hot = cline;
