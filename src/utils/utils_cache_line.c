@@ -84,7 +84,7 @@ delete_invalid:
 	 * Even if the cache line was on the freelist,
 	 * it must be set as unavailable.
 	 */
-	ocf_lru_detach(cache, part, line);
+	ocf_eviction_detach(cache, part, line);
 }
 
 void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
@@ -108,7 +108,7 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 
 void set_cache_line_available(struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	ocf_lru_restore(cache, line);
+	ocf_eviction_reattach(cache, line);
 }
 
 void set_cache_line_unavailable(struct ocf_cache *cache, uint8_t start_bit,

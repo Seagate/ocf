@@ -84,6 +84,19 @@ struct eviction_policy_ops {
 
 	int (*restore_runtime)(ocf_cache_t cache);
 		/*!< Restore eviction runtime metadata on cache load */
+
+	int (*metadata_actor)(struct ocf_cache *cache,
+                       ocf_part_id_t part_id, ocf_core_id_t core_id,
+                       uint64_t start_byte, uint64_t end_byte,
+                       ocf_metadata_actor_t actor);
+		/*!< Get implementation of ocf_metadata_actor according to the eviction policy */
+
+	void (*detach)(ocf_cache_t cache, struct ocf_part *part,
+		ocf_cache_line_t cline);
+		/*!< Move cacheline to detached freelist */
+
+	void (*reattach)(ocf_cache_t cache, ocf_cache_line_t cline);
+		/*!< Move cacheline back to available list */
 };
 
 extern struct eviction_policy_ops

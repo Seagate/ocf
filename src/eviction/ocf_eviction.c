@@ -1,7 +1,6 @@
 #include "ocf_eviction.h"
 #include "ocf_eviction_ops.h"
 #include "../ocf_request.h"
-#include "../ocf_space.h"
 #include "ocf_lfu.h"
 #include "ocf_lru.h"
 
@@ -22,7 +21,10 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
         .clean_cline = ocf_lru_clean_cline,
         .clean = ocf_lru_clean,
         .populate = ocf_lru_populate,
-        .restore_runtime = ocf_lru_restore_runtime
+        .restore_runtime = ocf_lru_restore_runtime,
+        .metadata_actor = ocf_lru_metadata_actor,
+        .detach = ocf_lru_detach,
+        .reattach = ocf_lru_reattach
     },
 
     [ocf_eviction_lfu] = {
@@ -41,7 +43,10 @@ struct eviction_policy_ops ocf_eviction_policies[ocf_eviction_max] = {
         .clean_cline = ocf_lfu_clean_cline, 
         .clean = ocf_lfu_clean,
         .populate = ocf_lfu_populate,
-        .restore_runtime = ocf_lfu_restore_runtime
+        .restore_runtime = ocf_lfu_restore_runtime,
+        .metadata_actor = ocf_lfu_metadata_actor,
+        .detach = ocf_lfu_detach,
+        .reattach = ocf_lfu_reattach
     }
 };
 
@@ -233,8 +238,9 @@ void ocf_eviction_populate(ocf_cache_t cache,
     }
 }
 
-int ocf_eviction_restore_runtime(ocf_cache_t cache) {
-            ocf_eviction_t type = cache->eviction_policy;
+int ocf_eviction_restore_runtime(ocf_cache_t cache) 
+{
+    ocf_eviction_t type = cache->eviction_policy;
 
     ENV_BUG_ON(type >= ocf_eviction_max);
 
@@ -246,7 +252,7 @@ int ocf_eviction_restore_runtime(ocf_cache_t cache) {
 }
 
 /** Functionality copied over from LRU */
-static bool _is_cache_line_acting(struct ocf_cache *cache,
+bool _is_cache_line_acting(struct ocf_cache *cache,
                                   uint32_t cache_line, ocf_core_id_t core_id,
                                   uint64_t start_line, uint64_t end_line)
 {
@@ -287,67 +293,43 @@ int ocf_metadata_actor(struct ocf_cache *cache,
                        uint64_t start_byte, uint64_t end_byte,
                        ocf_metadata_actor_t actor)
 {
-    uint32_t step = 0;
-    uint64_t start_line, end_line;
-    int ret = 0;
-    struct ocf_alock *c = ocf_cache_line_concurrency(cache);
-    int clean;
-    struct ocf_lfu_list *list;
-    struct ocf_part *part;
-    unsigned i, cline;
-    struct ocf_lfu_meta *node;
+    ocf_eviction_t type = cache->eviction_policy;
 
-    start_line = ocf_bytes_2_lines(cache, start_byte);
-    end_line = ocf_bytes_2_lines(cache, end_byte);
+    ENV_BUG_ON(type >= ocf_eviction_max);
 
-    if (part_id == PARTITION_UNSPECIFIED)
+    if (ocf_eviction_policies[type].restore_runtime)
     {
-        for (cline = 0; cline < cache->device->collision_table_entries;
-             ++cline)
-        {
-            if (_is_cache_line_acting(cache, cline, core_id,
-                                      start_line, end_line))
-            {
-                if (ocf_cache_line_is_used(c, cline))
-                    ret = -OCF_ERR_AGAIN;
-                else
-                    actor(cache, cline);
-            }
-
-            OCF_COND_RESCHED_DEFAULT(step);
-        }
-        return ret;
+        return ocf_eviction_policies[type].metadata_actor(cache, part_id, core_id, start_byte, end_byte, actor);
     }
+    return -1;
+}
 
-    ENV_BUG_ON(part_id == PARTITION_FREELIST);
-    part = &cache->user_parts[part_id].part;
+uint32_t ocf_eviction_num_free(ocf_cache_t cache)
+{
+	return env_atomic_read(&cache->free.runtime->curr_size);
+}
 
-    for (i = 0; i < MAX_FREQ; i++)
+void ocf_eviction_detach(ocf_cache_t cache, struct ocf_part *part,
+		ocf_cache_line_t cline) 
+{
+    ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (ocf_eviction_policies[type].restore_runtime)
     {
-        for (clean = 0; clean <= 1; clean++)
-        {
-            list = ocf_lfu_get_list(part, i, clean);
-
-            cline = list->tail;
-            while (cline != END_MARKER)
-            {
-                node = ocf_metadata_get_lfu(cache, cline);
-                if (!_is_cache_line_acting(cache, cline,
-                                           core_id, start_line,
-                                           end_line))
-                {
-                    cline = node->prev;
-                    continue;
-                }
-                if (ocf_cache_line_is_used(c, cline))
-                    ret = -OCF_ERR_AGAIN;
-                else
-                    actor(cache, cline);
-                cline = node->prev;
-                OCF_COND_RESCHED_DEFAULT(step);
-            }
-        }
+        return ocf_eviction_policies[type].detach(cache, part, cline);
     }
+}
 
-    return ret;
+void ocf_eviction_reattach(ocf_cache_t cache, ocf_cache_line_t cline)
+{
+    ocf_eviction_t type = cache->eviction_policy;
+
+    ENV_BUG_ON(type >= ocf_eviction_max);
+
+    if (ocf_eviction_policies[type].restore_runtime)
+    {
+        return ocf_eviction_policies[type].reattach(cache, cline);
+    }
 }

@@ -47,7 +47,7 @@
 #define META_COUNT 128
 
 static struct ocf_lfu_meta meta[META_COUNT];
-static struct ocf_lfu_list freq_bucket_lists[MAX_FREQ];
+static struct ocf_lfu_list freq_bucket_lists[LFU_MAX_FREQ];
 
 /** Wrappers */
 
@@ -64,7 +64,7 @@ struct ocf_lfu_meta *__wrap_ocf_metadata_get_lfu(ocf_cache_t cache, ocf_cache_li
 
 struct ocf_lfu_list *__wrap_ocf_lfu_get_list(struct ocf_part *part, uint32_t freq, bool clean) 
 {
-	assert(freq < MAX_FREQ);
+	assert(freq < LFU_MAX_FREQ);
 	return &freq_bucket_lists[freq];
 }
 
@@ -78,7 +78,7 @@ static const unsigned END_MARKER = (uint32_t)-1;
 
 /** Setup */
 static int setup_freq_bucket_lists(void **state) {
-    for (int i = 0; i < MAX_FREQ; i++) {
+    for (int i = 0; i < LFU_MAX_FREQ; i++) {
         freq_bucket_lists[i].head = END_MARKER;
         freq_bucket_lists[i].tail = END_MARKER;
         freq_bucket_lists[i].num_nodes = 0;
@@ -195,19 +195,19 @@ static void _lfu_init_test05(void **state)
 	print_test_description("lfu: test increment frequency when maxed\n");
 
 	// Add to cache
-	meta[cline].freq = MAX_FREQ - 1;
-	add_to_freq_bucket(MAX_FREQ - 1, NULL, cline, true);
+	meta[cline].freq = LFU_MAX_FREQ - 1;
+	add_to_freq_bucket(LFU_MAX_FREQ - 1, NULL, cline, true);
 
     // Try increment 1
     ocf_lfu_increment(NULL, cline);
 	
 	// Should not increase
-	assert_int_equal(meta[cline].freq, MAX_FREQ - 1);
+	assert_int_equal(meta[cline].freq, LFU_MAX_FREQ - 1);
 	
 	// Check if buckets were updated correctly
-	assert_int_equal(freq_bucket_lists[MAX_FREQ - 1].num_nodes, 1);
+	assert_int_equal(freq_bucket_lists[LFU_MAX_FREQ - 1].num_nodes, 1);
 	// Due to optimization, it doesn't need to be moved to head:
-	// assert_int_equal(freq_bucket_lists[MAX_FREQ - 1].head, cline);
+	// assert_int_equal(freq_bucket_lists[LFU_MAX_FREQ - 1].head, cline);
 }
 
 static void _lfu_init_test06(void **state)

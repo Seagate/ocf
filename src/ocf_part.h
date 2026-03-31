@@ -13,6 +13,7 @@
 #include "cleaning/cleaning.h"
 #include "ocf_space.h"
 #include "ocf_env_refcnt.h"
+#include "eviction/ocf_eviction.h"
 
 #define OCF_NUM_PARTITIONS (OCF_USER_IO_CLASS_MAX + 3)
 
@@ -35,14 +36,6 @@ struct ocf_user_part_config {
 struct ocf_part_runtime {
 	env_atomic curr_size;
 	env_atomic evict_counter;
-};
-
-struct ocf_lru_part_runtime {
-	struct ocf_lru_part_meta lru[OCF_NUM_LRU_LISTS];
-};
-
-struct ocf_lfu_part_runtime {
-	struct ocf_lfu_bucket freq_buckets[MAX_FREQ];
 };
 
 typedef bool ( *_lru_hash_locked_pfn)(struct ocf_request *req,

@@ -1670,22 +1670,19 @@ void ocf_metadata_get_core_and_part_id(struct ocf_cache *cache,
 									   ocf_part_id_t *part_id)
 {
 	const struct ocf_metadata_map *collision;
-	const struct ocf_lru_meta *info;
 	struct ocf_metadata_ctrl *ctrl =
 		(struct ocf_metadata_ctrl *)cache->metadata.priv;
 
 	collision = ocf_metadata_raw_rd_access(cache,
 										   &(ctrl->raw_desc[metadata_segment_collision]), line);
 
-	info =  ocf_metadata_raw_rd_access(cache,
-			&(ctrl->raw_desc[metadata_segment_lru]), line);
 
-	ENV_BUG_ON(!collision || !info);
+	ENV_BUG_ON(!collision);
 
 	if (core_id)
 		*core_id = collision->core_id;
 	if (part_id)
-		*part_id = info->partition_id;
+		*part_id = ocf_metadata_get_partition_id(cache, line);
 }
 /*******************************************************************************
  * Hash Table

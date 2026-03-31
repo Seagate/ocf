@@ -37,7 +37,7 @@ struct test_cache
 	uint32_t req_unmapped;
 };
 
-uint32_t __wrap_ocf_lru_num_free(ocf_cache_t cache)
+uint32_t __wrap_ocf_eviction_num_free(ocf_cache_t cache)
 {
 	return 0;
 }

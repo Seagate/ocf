@@ -2,6 +2,10 @@
 #define EVICTION_H_
 
 #include "ocf/ocf.h"
+#include "../ocf_space.h"
+
+#include "ocf_lfu_structs.h"
+#include "ocf_lru_structs.h"
 
 #define EVICTION_POLICY_CONFIG_BYTES 256
 #define EVICTION_POLICY_TYPE_MAX 2
@@ -53,13 +57,14 @@ void ocf_eviction_populate(ocf_cache_t cache,
 
 int ocf_eviction_restore_runtime(ocf_cache_t cache);
 
-int ocf_metadata_actor(struct ocf_cache *cache,
-                       ocf_part_id_t part_id, ocf_core_id_t core_id,
-                       uint64_t start_byte, uint64_t end_byte,
-                       ocf_metadata_actor_t actor);
-
-static bool _is_cache_line_acting(struct ocf_cache *cache,
+uint32_t ocf_eviction_num_free(ocf_cache_t cache);
+bool _is_cache_line_acting(struct ocf_cache *cache,
                                   uint32_t cache_line, ocf_core_id_t core_id,
                                   uint64_t start_line, uint64_t end_line);
+
+void ocf_eviction_detach(ocf_cache_t cache, struct ocf_part *part,
+		ocf_cache_line_t cline);
+
+void ocf_eviction_reattach(ocf_cache_t cache, ocf_cache_line_t cline);
 
 #endif /* EVICTION_H_ */

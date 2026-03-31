@@ -3,28 +3,7 @@
 #ifndef OCF_LFU_H_
 #define OCF_LFU_H_
 
-#include "../ocf_space.h"
 #include "ocf_eviction.h"
-
-#define MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)
-
-struct ocf_lfu_meta {
-    uint32_t freq;          // Access frequency counter
-    uint32_t prev;          // For doubly linked list in freq bucket
-    uint32_t next;
-    bool clean;
-} __attribute__((packed));
-
-struct ocf_lfu_list {
-    uint32_t head;          // Head of list for this frequency
-    uint32_t tail;          // Tail of list
-    uint32_t num_nodes;     // Total nodes in this freq bucket
-};
-
-struct ocf_lfu_bucket {
-    struct ocf_lfu_list clean; // Clean list in freq bucket
-    struct ocf_lfu_list dirty; // Dirty list in freq bucket
-};
 
 struct ocf_part;
 struct ocf_user_part;
@@ -51,9 +30,18 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
                    ocf_queue_t io_queue, uint32_t count);
 
+void ocf_lfu_detach(ocf_cache_t cache, struct ocf_part *part,
+		ocf_cache_line_t cline);
+void ocf_lfu_reattach(ocf_cache_t cache, ocf_cache_line_t cline);
+
 void ocf_lfu_populate(ocf_cache_t cache,
 		ocf_eviction_populate_end_t cmpl, void *priv);
 
 int ocf_lfu_restore_runtime(ocf_cache_t cache);
+
+int ocf_lfu_metadata_actor(struct ocf_cache *cache,
+		ocf_part_id_t part_id, ocf_core_id_t core_id,
+		uint64_t start_byte, uint64_t end_byte,
+		ocf_metadata_actor_t actor);
 
 #endif

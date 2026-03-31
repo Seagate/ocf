@@ -6,7 +6,6 @@
  */
 
 #include "ocf_env.h"
-#include "../ocf_space.h"
 #include "ocf_env_refcnt.h"
 #include "ocf_lru.h"
 #include "../utils/utils_cleaner.h"
@@ -222,7 +221,7 @@ void ocf_lru_detach(ocf_cache_t cache, struct ocf_part *part,
 	ocf_lru_repart(cache, cline, part, &cache->free_detached);
 }
 
-void ocf_lru_restore(ocf_cache_t cache, ocf_cache_line_t cline)
+void ocf_lru_reattach(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	ocf_lru_repart(cache, cline, &cache->free_detached, &cache->free);
 }
@@ -1193,72 +1192,67 @@ void ocf_lru_populate(ocf_cache_t cache,
  *
  * global metadata write lock must be held before calling this function
  */
-// int ocf_metadata_actor(struct ocf_cache *cache,
-// 		ocf_part_id_t part_id, ocf_core_id_t core_id,
-// 		uint64_t start_byte, uint64_t end_byte,
-// 		ocf_metadata_actor_t actor)
-// {
-// 	uint32_t step = 0;
-// 	uint64_t start_line, end_line;
-// 	int ret = 0;
-// 	struct ocf_alock *c = ocf_cache_line_concurrency(cache);
-// 	int clean;
-// 	struct ocf_lru_list *list;
-// 	struct ocf_part *part;
-// 	unsigned i, cline;
-// 	struct ocf_lru_meta *node;
-
-// 	start_line = ocf_bytes_2_lines(cache, start_byte);
-// 	end_line = ocf_bytes_2_lines(cache, end_byte);
-
-// 	if (part_id == PARTITION_UNSPECIFIED) {
-// 		for (cline = 0; cline < cache->device->collision_table_entries;
-// 				++cline) {
-// 			if (_is_cache_line_acting(cache, cline, core_id,
-// 					start_line, end_line)) {
-// 				if (ocf_cache_line_is_used(c, cline))
-// 					ret = -OCF_ERR_AGAIN;
-// 				else
-// 					actor(cache, cline);
-// 			}
-
-// 			OCF_COND_RESCHED_DEFAULT(step);
-// 		}
-// 		return ret;
-// 	}
-
-// 	ENV_BUG_ON(part_id == PARTITION_FREELIST);
-// 	part = &cache->user_parts[part_id].part;
-
-// 	for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
-// 		for (clean = 0; clean <= 1; clean++) {
-// 			list = ocf_lru_get_list(part, i, clean);
-
-// 			cline = list->tail;
-// 			while (cline != end_marker) {
-// 				node = ocf_metadata_get_lru(cache, cline);
-// 				if (!_is_cache_line_acting(cache, cline,
-// 						core_id, start_line,
-// 						end_line)) {
-// 					cline = node->prev;
-// 					continue;
-// 				}
-// 				if (ocf_cache_line_is_used(c, cline))
-// 					ret = -OCF_ERR_AGAIN;
-// 				else
-// 					actor(cache, cline);
-// 				cline = node->prev;
-// 				OCF_COND_RESCHED_DEFAULT(step);
-// 			}
-// 		}
-// 	}
-
-// 	return ret;
-// }
-
-uint32_t ocf_lru_num_free(ocf_cache_t cache)
+int ocf_lru_metadata_actor(struct ocf_cache *cache,
+		ocf_part_id_t part_id, ocf_core_id_t core_id,
+		uint64_t start_byte, uint64_t end_byte,
+		ocf_metadata_actor_t actor)
 {
-	return env_atomic_read(&cache->free.runtime->curr_size);
+	uint32_t step = 0;
+	uint64_t start_line, end_line;
+	int ret = 0;
+	struct ocf_alock *c = ocf_cache_line_concurrency(cache);
+	int clean;
+	struct ocf_lru_list *list;
+	struct ocf_part *part;
+	unsigned i, cline;
+	struct ocf_lru_meta *node;
+
+	start_line = ocf_bytes_2_lines(cache, start_byte);
+	end_line = ocf_bytes_2_lines(cache, end_byte);
+
+	if (part_id == PARTITION_UNSPECIFIED) {
+		for (cline = 0; cline < cache->device->collision_table_entries;
+				++cline) {
+			if (_is_cache_line_acting(cache, cline, core_id,
+					start_line, end_line)) {
+				if (ocf_cache_line_is_used(c, cline))
+					ret = -OCF_ERR_AGAIN;
+				else
+					actor(cache, cline);
+			}
+
+			OCF_COND_RESCHED_DEFAULT(step);
+		}
+		return ret;
+	}
+
+	ENV_BUG_ON(part_id == PARTITION_FREELIST);
+	part = &cache->user_parts[part_id].part;
+
+	for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
+		for (clean = 0; clean <= 1; clean++) {
+			list = ocf_lru_get_list(part, i, clean);
+
+			cline = list->tail;
+			while (cline != end_marker) {
+				node = ocf_metadata_get_lru(cache, cline);
+				if (!_is_cache_line_acting(cache, cline,
+						core_id, start_line,
+						end_line)) {
+					cline = node->prev;
+					continue;
+				}
+				if (ocf_cache_line_is_used(c, cline))
+					ret = -OCF_ERR_AGAIN;
+				else
+					actor(cache, cline);
+				cline = node->prev;
+				OCF_COND_RESCHED_DEFAULT(step);
+			}
+		}
+	}
+
+	return ret;
 }
 
 void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
@@ -1269,7 +1263,6 @@ void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
 	list = ocf_lru_get_list(&cache->free, lru_list, true);
 	add_lru_head_nobalance(cache, list, cline);
 }
-
 
 /**
  * Restore metadata on load
@@ -1331,7 +1324,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
 
-	if (!ocf_metadata_check(cache, cline) || core_id > OCF_CORE_MAX) {
+	if (!ocf_metadata_check(cache, cline) || core_id > OCF_CORE_NUM) {
 		// ocf_cache_log(cache, log_err,
 		// 	"[ocf_lru_restore_cline] invalid metadata: cline=%u core_id=%u\n",
 		// 	cline, core_id);
@@ -1341,7 +1334,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	valid = metadata_test_valid_any(cache, cline);
 	node = ocf_metadata_get_lru(cache, cline);
 
-	if (!valid || core_id == OCF_CORE_MAX) { // If cline is free, put into free list
+	if (!valid || core_id == OCF_CORE_NUM) { // If cline is free, put into free list
 		part = &cache->free;
 		list = ocf_lru_get_list(part, cline % OCF_NUM_LRU_LISTS, true);
 		env_atomic_inc(&cache->free.runtime->curr_size);

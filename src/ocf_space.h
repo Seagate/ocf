@@ -9,11 +9,6 @@
 #define __LAYER_EVICTION_POLICY_H__
 
 #include "ocf/ocf.h"
-#include "eviction/ocf_lru.h"
-#include "eviction/ocf_lru_structs.h"
-
-#include "eviction/ocf_lfu.h"
-#include "eviction/ocf_eviction.h"
 
 #define OCF_NUM_LRU_LISTS 32
 #define OCF_LRU_CHUNK_SIZE 256
@@ -21,6 +16,8 @@
 
 #define OCF_LRU_GET_LIST_INDEX(cline) \
 	(((cline) / OCF_LRU_CHUNK_SIZE) % OCF_NUM_LRU_LISTS)
+
+#define LFU_MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)
 
 struct ocf_part;
 struct ocf_user_part;

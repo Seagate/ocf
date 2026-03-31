@@ -542,7 +542,7 @@ int ocf_engine_prepare_clines(struct ocf_request *req)
 		for_each_user_part(cache, user_part, part_id) {
 			if (!ocf_user_part_is_valid(user_part))
 				continue;
-			ocf_lru_clean(cache, user_part, req->io_queue, 128);
+			ocf_eviction_clean(cache, user_part, req->io_queue, 128);
 		}
 	}
 
