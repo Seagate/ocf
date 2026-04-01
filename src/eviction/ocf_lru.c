@@ -1382,7 +1382,7 @@ static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	if (node->prev == end_marker) {
 		if (list->head != end_marker) {
-			struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
+			// struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
 			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not head. head = %u", list->head);
 
 			// ocf_cache_log(cache, log_err,

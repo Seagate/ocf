@@ -277,6 +277,7 @@ static void __deinit_eviction_policy(ocf_cache_t cache) {
 
 	/* free freelist runtime */
 	ocf_eviction_deinit_part(cache, &cache->free);
+	ocf_eviction_deinit_part(cache, &cache->free_detached);
 
 	// /* free cache-wide policy object, if you have one */
 	// ocf_eviction_deinit(cache);
@@ -879,8 +880,6 @@ static void _ocf_mngt_init_metadata_complete(void *priv, int error)
 					  "ERROR: Cannot initialize cache metadata\n");
 		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_NO_MEM);
 	}
-
-	context->flags.eviction_initialized = true;
 
 	ocf_pipeline_next(context->pipeline);
 }
@@ -2016,6 +2015,8 @@ static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 
 	if (ret)
 		OCF_PL_FINISH_RET(pipeline, ret);
+
+	context->flags.eviction_initialized = true;
 
 	ocf_cache_log(cache, log_debug,
 					  "[_ocf_mngt_init_eviction] cache->eviction_policy = %d\n", cache->eviction_policy);

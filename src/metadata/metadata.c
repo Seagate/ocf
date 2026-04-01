@@ -1310,7 +1310,7 @@ void ocf_metadata_flush_mark(struct ocf_cache *cache,
 {
 	struct ocf_metadata_ctrl *ctrl = NULL;
 
-	OCF_DEBUG_TRACE(cache);
+	// OCF_DEBUG_TRACE(cache);
 
 	ctrl = (struct ocf_metadata_ctrl *)cache->metadata.priv;
 
@@ -1334,7 +1334,7 @@ void ocf_metadata_flush_do_asynch(struct ocf_cache *cache,
 	int result = 0;
 	struct ocf_metadata_ctrl *ctrl = NULL;
 
-	OCF_DEBUG_TRACE(cache);
+	// OCF_DEBUG_TRACE(cache);
 
 	ctrl = (struct ocf_metadata_ctrl *)cache->metadata.priv;
 
