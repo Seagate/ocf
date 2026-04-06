@@ -24,6 +24,346 @@
 
 static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
 
+// DEBUG PROFILING
+#ifndef OCF_LRU_DEBUG_PROFILE
+#define OCF_LRU_DEBUG_PROFILE 1
+#endif
+
+#if OCF_LRU_DEBUG_PROFILE
+#define OCF_LRU_DEBUG_PROFILE_DUMP_EVERY_HOT (1ULL << 17)
+#define OCF_LRU_DEBUG_PROFILE_DUMP_EVERY_REQ 64ULL
+struct ocf_lru_debug_profile_stats {
+	env_atomic64 hot_calls;
+	env_atomic64 hot_skipped_calls;
+	env_atomic64 hot_promoted_calls;
+	env_atomic64 hot_total_ns;
+	env_atomic64 hot_skipped_ns;
+	env_atomic64 hot_lock_wait_ns;
+	env_atomic64 hot_body_ns;
+
+	env_atomic64 req_calls;
+	env_atomic64 req_clines_requested;
+	env_atomic64 req_clines_assigned;
+	env_atomic64 req_total_ns;
+
+	env_atomic64 dirty_calls;
+	env_atomic64 dirty_total_ns;
+	env_atomic64 dirty_lock_wait_ns;
+	env_atomic64 dirty_body_ns;
+
+	env_atomic64 clean_calls;
+	env_atomic64 clean_total_ns;
+	env_atomic64 clean_lock_wait_ns;
+	env_atomic64 clean_body_ns;
+
+	env_atomic64 add_calls;
+	env_atomic64 remove_calls;
+	env_atomic64 repart_calls;
+	env_atomic64 rm_cline_calls;
+
+	env_atomic64 evict_calls;
+	env_atomic64 evict_total_ns;
+	env_atomic64 evict_list_lock_wait_ns;
+	env_atomic64 evict_lists_scanned;
+	env_atomic64 evict_clines_scanned;
+	env_atomic64 evict_found;
+
+	env_atomic64 free_calls;
+	env_atomic64 free_total_ns;
+	env_atomic64 free_list_lock_wait_ns;
+	env_atomic64 free_lists_scanned;
+	env_atomic64 free_clines_scanned;
+	env_atomic64 free_found;
+
+	env_atomic64 evict_trylock_fail_cacheline;
+	env_atomic64 evict_trylock_fail_self;
+	env_atomic64 evict_trylock_fail_hash;
+	env_atomic64 evict_trylock_fail_waiters;
+
+	env_atomic64 dirty_list_calls[OCF_NUM_LRU_LISTS];
+	env_atomic64 clean_list_calls[OCF_NUM_LRU_LISTS];
+	env_atomic64 evict_found_list[OCF_NUM_LRU_LISTS];
+	env_atomic64 free_found_list[OCF_NUM_LRU_LISTS];
+};
+
+static struct ocf_lru_debug_profile_stats ocf_lru_prof_stats;
+
+static inline uint64_t ocf_lru_prof_now_ns(void)
+{
+	return env_get_tick_count();
+}
+
+static inline uint64_t ocf_lru_prof_delta_ns(uint64_t start_ns, uint64_t end_ns)
+{
+	return env_ticks_to_nsecs(end_ns - start_ns);
+}
+
+static inline uint64_t ocf_lru_prof_avg(uint64_t total, uint64_t cnt)
+{
+	return cnt ? (total / cnt) : 0;
+}
+
+static inline void ocf_lru_prof_dump_named_list_array(ocf_cache_t cache,
+		const char *tag, const char *name, env_atomic64 *arr)
+{
+	uint32_t i;
+
+	for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
+		ocf_cache_log(cache, log_info,
+				"lru-prof[%s]: %s[%u]=%" ENV_PRIu64 "\n",
+				tag, name, i, env_atomic64_read(&arr[i]));
+	}
+}
+
+static void ocf_lru_prof_dump(ocf_cache_t cache, const char *reason)
+{
+	uint64_t hot_calls = env_atomic64_read(&ocf_lru_prof_stats.hot_calls);
+	uint64_t hot_skipped_calls =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_skipped_calls);
+	uint64_t hot_promoted_calls =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_promoted_calls);
+	uint64_t hot_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_total_ns);
+	uint64_t hot_skipped_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_skipped_ns);
+	uint64_t hot_lock_wait_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_lock_wait_ns);
+	uint64_t hot_body_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.hot_body_ns);
+
+	uint64_t req_calls = env_atomic64_read(&ocf_lru_prof_stats.req_calls);
+	uint64_t req_clines_requested =
+		env_atomic64_read(&ocf_lru_prof_stats.req_clines_requested);
+	uint64_t req_clines_assigned =
+		env_atomic64_read(&ocf_lru_prof_stats.req_clines_assigned);
+	uint64_t req_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.req_total_ns);
+
+	uint64_t dirty_calls = env_atomic64_read(&ocf_lru_prof_stats.dirty_calls);
+	uint64_t dirty_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.dirty_total_ns);
+	uint64_t dirty_lock_wait_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.dirty_lock_wait_ns);
+	uint64_t dirty_body_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.dirty_body_ns);
+
+	uint64_t clean_calls = env_atomic64_read(&ocf_lru_prof_stats.clean_calls);
+	uint64_t clean_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.clean_total_ns);
+	uint64_t clean_lock_wait_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.clean_lock_wait_ns);
+	uint64_t clean_body_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.clean_body_ns);
+
+	uint64_t add_calls = env_atomic64_read(&ocf_lru_prof_stats.add_calls);
+	uint64_t remove_calls = env_atomic64_read(&ocf_lru_prof_stats.remove_calls);
+	uint64_t repart_calls = env_atomic64_read(&ocf_lru_prof_stats.repart_calls);
+	uint64_t rm_cline_calls =
+		env_atomic64_read(&ocf_lru_prof_stats.rm_cline_calls);
+
+	uint64_t evict_calls = env_atomic64_read(&ocf_lru_prof_stats.evict_calls);
+	uint64_t evict_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_total_ns);
+	uint64_t evict_list_lock_wait_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_list_lock_wait_ns);
+	uint64_t evict_lists_scanned =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_lists_scanned);
+	uint64_t evict_clines_scanned =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_clines_scanned);
+	uint64_t evict_found =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_found);
+
+	uint64_t free_calls = env_atomic64_read(&ocf_lru_prof_stats.free_calls);
+	uint64_t free_total_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.free_total_ns);
+	uint64_t free_list_lock_wait_ns =
+		env_atomic64_read(&ocf_lru_prof_stats.free_list_lock_wait_ns);
+	uint64_t free_lists_scanned =
+		env_atomic64_read(&ocf_lru_prof_stats.free_lists_scanned);
+	uint64_t free_clines_scanned =
+		env_atomic64_read(&ocf_lru_prof_stats.free_clines_scanned);
+	uint64_t free_found =
+		env_atomic64_read(&ocf_lru_prof_stats.free_found);
+
+	uint64_t fail_cacheline =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_trylock_fail_cacheline);
+	uint64_t fail_self =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_trylock_fail_self);
+	uint64_t fail_hash =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_trylock_fail_hash);
+	uint64_t fail_waiters =
+		env_atomic64_read(&ocf_lru_prof_stats.evict_trylock_fail_waiters);
+
+	uint64_t avg_hot_ns = ocf_lru_prof_avg(hot_total_ns, hot_calls);
+	uint64_t avg_hot_skipped_ns = ocf_lru_prof_avg(hot_skipped_ns, hot_skipped_calls);
+	uint64_t avg_hot_lock_wait_ns =
+		ocf_lru_prof_avg(hot_lock_wait_ns, hot_calls - hot_skipped_calls);
+	uint64_t avg_hot_body_ns =
+		ocf_lru_prof_avg(hot_body_ns, hot_calls - hot_skipped_calls);
+
+	uint64_t avg_req_ns = ocf_lru_prof_avg(req_total_ns, req_calls);
+
+	uint64_t avg_dirty_ns = ocf_lru_prof_avg(dirty_total_ns, dirty_calls);
+	uint64_t avg_dirty_lock_wait_ns =
+		ocf_lru_prof_avg(dirty_lock_wait_ns, dirty_calls);
+	uint64_t avg_dirty_body_ns =
+		ocf_lru_prof_avg(dirty_body_ns, dirty_calls);
+
+	uint64_t avg_clean_ns = ocf_lru_prof_avg(clean_total_ns, clean_calls);
+	uint64_t avg_clean_lock_wait_ns =
+		ocf_lru_prof_avg(clean_lock_wait_ns, clean_calls);
+	uint64_t avg_clean_body_ns =
+		ocf_lru_prof_avg(clean_body_ns, clean_calls);
+
+	uint64_t avg_evict_ns = ocf_lru_prof_avg(evict_total_ns, evict_calls);
+	uint64_t avg_evict_lock_wait_ns =
+		ocf_lru_prof_avg(evict_list_lock_wait_ns, evict_calls);
+	uint64_t avg_evict_lists =
+		ocf_lru_prof_avg(evict_lists_scanned, evict_calls);
+	uint64_t avg_evict_clines =
+		ocf_lru_prof_avg(evict_clines_scanned, evict_calls);
+
+	uint64_t avg_free_ns = ocf_lru_prof_avg(free_total_ns, free_calls);
+	uint64_t avg_free_lock_wait_ns =
+		ocf_lru_prof_avg(free_list_lock_wait_ns, free_calls);
+	uint64_t avg_free_lists =
+		ocf_lru_prof_avg(free_lists_scanned, free_calls);
+	uint64_t avg_free_clines =
+		ocf_lru_prof_avg(free_clines_scanned, free_calls);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: hot=%" ENV_PRIu64
+			" skipped=%" ENV_PRIu64
+			" promoted=%" ENV_PRIu64
+			" avg_hot_ns=%" ENV_PRIu64
+			" avg_hot_skipped_ns=%" ENV_PRIu64
+			" avg_lock_wait_ns=%" ENV_PRIu64
+			" avg_body_ns=%" ENV_PRIu64 "\n",
+			reason,
+			hot_calls,
+			hot_skipped_calls,
+			hot_promoted_calls,
+			avg_hot_ns,
+			avg_hot_skipped_ns,
+			avg_hot_lock_wait_ns,
+			avg_hot_body_ns);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: req=%" ENV_PRIu64
+			" req_clines=%" ENV_PRIu64 "/%" ENV_PRIu64
+			" avg_req_ns=%" ENV_PRIu64 "\n",
+			reason,
+			req_calls,
+			req_clines_assigned,
+			req_clines_requested,
+			avg_req_ns);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: dirty=%" ENV_PRIu64
+			" avg_dirty_ns=%" ENV_PRIu64
+			" avg_dirty_lock_wait_ns=%" ENV_PRIu64
+			" avg_dirty_body_ns=%" ENV_PRIu64
+			" clean=%" ENV_PRIu64
+			" avg_clean_ns=%" ENV_PRIu64
+			" avg_clean_lock_wait_ns=%" ENV_PRIu64
+			" avg_clean_body_ns=%" ENV_PRIu64 "\n",
+			reason,
+			dirty_calls,
+			avg_dirty_ns,
+			avg_dirty_lock_wait_ns,
+			avg_dirty_body_ns,
+			clean_calls,
+			avg_clean_ns,
+			avg_clean_lock_wait_ns,
+			avg_clean_body_ns);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: evict=%" ENV_PRIu64
+			" found=%" ENV_PRIu64
+			" avg_evict_ns=%" ENV_PRIu64
+			" avg_evict_lock_wait_ns=%" ENV_PRIu64
+			" avg_lists_scanned=%" ENV_PRIu64
+			" avg_clines_scanned=%" ENV_PRIu64 "\n",
+			reason,
+			evict_calls,
+			evict_found,
+			avg_evict_ns,
+			avg_evict_lock_wait_ns,
+			avg_evict_lists,
+			avg_evict_clines);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: free=%" ENV_PRIu64
+			" found=%" ENV_PRIu64
+			" avg_free_ns=%" ENV_PRIu64
+			" avg_free_lock_wait_ns=%" ENV_PRIu64
+			" avg_lists_scanned=%" ENV_PRIu64
+			" avg_clines_scanned=%" ENV_PRIu64 "\n",
+			reason,
+			free_calls,
+			free_found,
+			avg_free_ns,
+			avg_free_lock_wait_ns,
+			avg_free_lists,
+			avg_free_clines);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: trylock_fail cacheline=%" ENV_PRIu64
+			" self=%" ENV_PRIu64
+			" hash=%" ENV_PRIu64
+			" waiters=%" ENV_PRIu64 "\n",
+			reason,
+			fail_cacheline,
+			fail_self,
+			fail_hash,
+			fail_waiters);
+
+	ocf_cache_log(cache, log_info,
+			"lru-prof[%s]: add=%" ENV_PRIu64
+			" remove=%" ENV_PRIu64
+			" repart=%" ENV_PRIu64
+			" rm_cline=%" ENV_PRIu64 "\n",
+			reason,
+			add_calls,
+			remove_calls,
+			repart_calls,
+			rm_cline_calls);
+
+	ocf_lru_prof_dump_named_list_array(cache, reason, "dirty_list_calls",
+			ocf_lru_prof_stats.dirty_list_calls);
+	ocf_lru_prof_dump_named_list_array(cache, reason, "clean_list_calls",
+			ocf_lru_prof_stats.clean_list_calls);
+	ocf_lru_prof_dump_named_list_array(cache, reason, "evict_found_list",
+			ocf_lru_prof_stats.evict_found_list);
+	ocf_lru_prof_dump_named_list_array(cache, reason, "free_found_list",
+			ocf_lru_prof_stats.free_found_list);
+}
+
+static inline void ocf_lru_prof_maybe_dump_hot(ocf_cache_t cache,
+		uint64_t hot_call_no)
+{
+	if ((hot_call_no & (OCF_LRU_DEBUG_PROFILE_DUMP_EVERY_HOT - 1)) == 0)
+		ocf_lru_prof_dump(cache, "hot");
+}
+
+static inline void ocf_lru_prof_maybe_dump_req(ocf_cache_t cache,
+		uint64_t req_call_no)
+{
+	if (req_call_no &&
+			(req_call_no % OCF_LRU_DEBUG_PROFILE_DUMP_EVERY_REQ) == 0)
+		ocf_lru_prof_dump(cache, "req");
+}
+
+#else
+static inline uint64_t ocf_lru_prof_now_ns(void) { return 0; }
+static inline uint64_t ocf_lru_prof_delta_ns(uint64_t start_ns, uint64_t end_ns) { return 0; }
+static inline void ocf_lru_prof_dump_named_list_array(ocf_cache_t cache,
+		const char *tag, const char *name, env_atomic64 *arr) {}
+static inline void ocf_lru_prof_dump(ocf_cache_t cache, const char *reason) {}
+static inline void ocf_lru_prof_maybe_dump_hot(ocf_cache_t cache, uint64_t hot_call_no) {}
+static inline void ocf_lru_prof_maybe_dump_req(ocf_cache_t cache, uint64_t req_call_no) {}
+#endif
+
 /* Helper to get the partition eviction runtime information */
 static inline struct ocf_lru_part_runtime *ocf_part_lru(struct ocf_part *part)
 {
@@ -211,6 +551,9 @@ static void remove_lru_list_nobalance(ocf_cache_t cache,
 static void ocf_lru_remove_locked(ocf_cache_t cache, struct ocf_lru_list *list,
 		ocf_cache_line_t cline)
 {
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_inc(&ocf_lru_prof_stats.remove_calls);
+#endif
 	remove_lru_list_nobalance(cache, list, cline);
 	balance_lru_list(cache, list);
 }
@@ -277,6 +620,9 @@ static inline struct ocf_lru_list *lru_get_cline_list(ocf_cache_t cache,
 
 void ocf_lru_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_inc(&ocf_lru_prof_stats.add_calls);
+#endif
 	struct ocf_lru_list *list = lru_get_cline_list(cache, cline);
 
 	add_lru_head(cache, list, cline);
@@ -311,6 +657,10 @@ void ocf_lru_repart(ocf_cache_t cache, ocf_cache_line_t cline,
 {
 	uint32_t lru_list = OCF_LRU_GET_LIST_INDEX(cline);
 
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_inc(&ocf_lru_prof_stats.repart_calls);
+#endif
+
 	OCF_METADATA_LRU_LOCK(lru_list);
 	ocf_lru_repart_locked(cache, cline, src_part, dst_part);
 	OCF_METADATA_LRU_UNLOCK(lru_list);
@@ -321,6 +671,10 @@ void ocf_lru_rm_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	ocf_part_id_t part_id = ocf_metadata_get_partition_id(cache, cline);
 	struct ocf_part *part = &cache->user_parts[part_id].part;
+
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_inc(&ocf_lru_prof_stats.rm_cline_calls);
+#endif
 
 	ocf_lru_repart(cache, cline, part, &cache->free);
 }
@@ -443,8 +797,13 @@ static inline bool _lru_iter_eviction_lock(struct ocf_lru_iter *iter,
 {
 	struct ocf_request *req = iter->req;
 
-	if (!ocf_cache_line_try_lock_wr(iter->c, cache_line))
+	if (!ocf_cache_line_try_lock_wr(iter->c, cache_line)) {
+#if OCF_LRU_DEBUG_PROFILE
+		env_atomic64_inc(
+				&ocf_lru_prof_stats.evict_trylock_fail_cacheline);
+#endif
 		return false;
+	}
 
 	ocf_metadata_get_core_info(iter->cache, cache_line,
 		core_id, core_line);
@@ -453,16 +812,25 @@ static inline bool _lru_iter_eviction_lock(struct ocf_lru_iter *iter,
 	if (*core_id == ocf_core_get_id(req->core) &&
 			*core_line >= req->core_line_first &&
 			*core_line <= req->core_line_last) {
+#if OCF_LRU_DEBUG_PROFILE
+		env_atomic64_inc(&ocf_lru_prof_stats.evict_trylock_fail_self);
+#endif
 		ocf_cache_line_unlock_wr(iter->c, cache_line);
 		return false;
 	}
 
 	if (!_lru_trylock_hash(iter, *core_id, *core_line)) {
+#if OCF_LRU_DEBUG_PROFILE
+		env_atomic64_inc(&ocf_lru_prof_stats.evict_trylock_fail_hash);
+#endif
 		ocf_cache_line_unlock_wr(iter->c, cache_line);
 		return false;
 	}
 
 	if (ocf_cache_line_are_waiters(iter->c, cache_line)) {
+#if OCF_LRU_DEBUG_PROFILE
+		env_atomic64_inc(&ocf_lru_prof_stats.evict_trylock_fail_waiters);
+#endif
 		_lru_unlock_hash(iter, *core_id, *core_line);
 		ocf_cache_line_unlock_wr(iter->c, cache_line);
 		return false;
@@ -564,21 +932,48 @@ static inline ocf_cache_line_t lru_iter_eviction_next(struct ocf_lru_iter *iter,
 	struct ocf_part *part = iter->part;
 	struct ocf_lru_list *list;
 
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t t0, t1 = 0, t2;
+	uint64_t lists_scanned = 0;
+	uint64_t clines_scanned = 0;
+
+	env_atomic64_inc(&ocf_lru_prof_stats.evict_calls);
+	t0 = env_get_tick_count();
+#endif
+
 	do {
 		lru_iter_advance(iter);
 		curr_lru = iter->lru_idx;
 
+#if OCF_LRU_DEBUG_PROFILE
+		lists_scanned++;
+#endif
+
 		ocf_metadata_lru_lock(&cache->metadata.lock, curr_lru);
+
+#if OCF_LRU_DEBUG_PROFILE
+		if (lists_scanned == 1)
+			t1 = env_get_tick_count();
+#endif
 
 		list = ocf_lru_get_list(part, curr_lru, iter->clean);
 
 		cline = list->tail;
 		while (cline != end_marker && !_lru_iter_eviction_lock(iter,
 				cline, core_id, core_line)) {
+#if OCF_LRU_DEBUG_PROFILE
+			clines_scanned++;
+#endif
 			cline = ocf_metadata_get_lru(iter->cache, cline)->prev;
 		}
 
 		if (cline != end_marker) {
+#if OCF_LRU_DEBUG_PROFILE
+			clines_scanned++;
+			env_atomic64_inc(&ocf_lru_prof_stats.evict_found);
+			env_atomic64_inc(
+					&ocf_lru_prof_stats.evict_found_list[curr_lru]);
+#endif
 			if (dst_part != part) {
 				ocf_lru_repart_locked(cache, cline, part,
 						dst_part);
@@ -594,6 +989,18 @@ static inline ocf_cache_line_t lru_iter_eviction_next(struct ocf_lru_iter *iter,
 			_lru_lru_set_empty(iter);
 		}
 	} while (cline == end_marker && !_lru_lru_all_empty(iter));
+
+#if OCF_LRU_DEBUG_PROFILE
+	t2 = env_get_tick_count();
+	env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.evict_total_ns);
+	if (t1 > t0)
+		env_atomic64_add(t1 - t0,
+				&ocf_lru_prof_stats.evict_list_lock_wait_ns);
+	env_atomic64_add(lists_scanned,
+			&ocf_lru_prof_stats.evict_lists_scanned);
+	env_atomic64_add(clines_scanned,
+			&ocf_lru_prof_stats.evict_clines_scanned);
+#endif
 
 	return cline;
 }
@@ -615,23 +1022,50 @@ static inline ocf_cache_line_t lru_iter_free_next(struct ocf_lru_iter *iter,
 	struct ocf_part *free = iter->part;
 	struct ocf_lru_list *list;
 
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t t0, t1 = 0, t2;
+	uint64_t lists_scanned = 0;
+	uint64_t clines_scanned = 0;
+
+	env_atomic64_inc(&ocf_lru_prof_stats.free_calls);
+	t0 = env_get_tick_count();
+#endif
+
 	ENV_BUG_ON(dst_part == free);
 
 	do {
 		lru_iter_advance(iter);
 		curr_lru = iter->lru_idx;
 
+#if OCF_LRU_DEBUG_PROFILE
+		lists_scanned++;
+#endif
+
 		ocf_metadata_lru_lock(&cache->metadata.lock, curr_lru);
+
+#if OCF_LRU_DEBUG_PROFILE
+		if (lists_scanned == 1)
+			t1 = env_get_tick_count();
+#endif
 
 		list = ocf_lru_get_list(free, curr_lru, true);
 
 		cline = list->tail;
 		while (cline != end_marker && !ocf_cache_line_try_lock_wr(
 				iter->c, cline)) {
+#if OCF_LRU_DEBUG_PROFILE
+			clines_scanned++;
+#endif
 			cline = ocf_metadata_get_lru(iter->cache, cline)->prev;
 		}
 
 		if (cline != end_marker) {
+#if OCF_LRU_DEBUG_PROFILE
+			clines_scanned++;
+			env_atomic64_inc(&ocf_lru_prof_stats.free_found);
+			env_atomic64_inc(
+					&ocf_lru_prof_stats.free_found_list[curr_lru]);
+#endif
 			ocf_lru_repart_locked(cache, cline, free, dst_part);
 		}
 
@@ -642,6 +1076,18 @@ static inline ocf_cache_line_t lru_iter_free_next(struct ocf_lru_iter *iter,
 			_lru_lru_set_empty(iter);
 		}
 	} while (cline == end_marker && !_lru_lru_all_empty(iter));
+
+#if OCF_LRU_DEBUG_PROFILE
+	t2 = env_get_tick_count();
+	env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.free_total_ns);
+	if (t1 > t0)
+		env_atomic64_add(t1 - t0,
+				&ocf_lru_prof_stats.free_list_lock_wait_ns);
+	env_atomic64_add(lists_scanned,
+			&ocf_lru_prof_stats.free_lists_scanned);
+	env_atomic64_add(clines_scanned,
+			&ocf_lru_prof_stats.free_clines_scanned);
+#endif
 
 	return cline;
 }
@@ -803,8 +1249,20 @@ uint32_t ocf_lru_req_clines(struct ocf_request *req,
 	ocf_part_id_t actual_src_part_id;
 	uint32_t dst_max_size;
 
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t req_call_no;
+	uint64_t req_t0;
+#endif
+
 	if (cline_no == 0)
 		return 0;
+
+#if OCF_LRU_DEBUG_PROFILE
+	req_call_no = (uint64_t)env_atomic64_inc_return(
+			&ocf_lru_prof_stats.req_calls);
+	env_atomic64_add(cline_no, &ocf_lru_prof_stats.req_clines_requested);
+	req_t0 = env_get_tick_count();
+#endif
 
 	dst_max_size = ocf_user_part_get_max_size(cache,
 			&cache->user_parts[req->part_id]);
@@ -902,6 +1360,14 @@ got_cline:
 		ENV_BUG_ON(req_idx == req->core_line_count && i != cline_no);
 	}
 
+
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_add(i, &ocf_lru_prof_stats.req_clines_assigned);
+	env_atomic64_add(env_get_tick_count() - req_t0,
+			&ocf_lru_prof_stats.req_total_ns);
+	ocf_lru_prof_maybe_dump_req(cache, req_call_no);
+#endif
+
 	return i;
 }
 
@@ -914,6 +1380,15 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	struct ocf_part *part;
 	bool clean;
 
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t hot_call_no;
+	uint64_t t0, t1, t2;
+
+	hot_call_no = (uint64_t)env_atomic64_inc_return(
+			&ocf_lru_prof_stats.hot_calls);
+	t0 = env_get_tick_count();
+#endif
+
 	node = ocf_metadata_get_lru(cache, cline);
 
 	/*
@@ -923,14 +1398,26 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	 * line that just turned hot. In return we avoid expensive
 	 * locking on a very common code path.
 	 */
-	if (node->hot)
+	if (node->hot) {
+#if OCF_LRU_DEBUG_PROFILE
+		env_atomic64_inc(&ocf_lru_prof_stats.hot_skipped_calls);
+		t2 = env_get_tick_count();
+		env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.hot_skipped_ns);
+		env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.hot_total_ns);
+		ocf_lru_prof_maybe_dump_hot(cache, hot_call_no);
+#endif
 		return;
+	}
 
 	part = &cache->user_parts[node->partition_id].part;
 	clean = !metadata_test_dirty(cache, cline);
 	list = ocf_lru_get_list(part, lru_list, clean);
 
 	OCF_METADATA_LRU_LOCK(lru_list);
+
+#if OCF_LRU_DEBUG_PROFILE
+	t1 = env_get_tick_count();
+#endif
 
 	/* cacheline must be on the list when set_hot gets called */
 	ENV_BUG_ON(node->next == end_marker && list->tail != cline);
@@ -939,6 +1426,15 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	ocf_lru_set_hot(cache, list, cline);
 
 	OCF_METADATA_LRU_UNLOCK(lru_list);
+
+#if OCF_LRU_DEBUG_PROFILE
+	env_atomic64_inc(&ocf_lru_prof_stats.hot_promoted_calls);
+	t2 = env_get_tick_count();
+	env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.hot_total_ns);
+	env_atomic64_add(t1 - t0, &ocf_lru_prof_stats.hot_lock_wait_ns);
+	env_atomic64_add(t2 - t1, &ocf_lru_prof_stats.hot_body_ns);
+	ocf_lru_prof_maybe_dump_hot(cache, hot_call_no);
+#endif
 }
 
 static inline void _lru_init(struct ocf_lru_list *list, bool track_hot)
@@ -1014,15 +1510,33 @@ void ocf_lru_clean_cline(ocf_cache_t cache, struct ocf_part *part,
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
 
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t t0, t1, t2;
+	env_atomic64_inc(&ocf_lru_prof_stats.clean_calls);
+	t0 = env_get_tick_count();
+#endif
+
 	clean_list = ocf_lru_get_list(part, lru_list, true);
 	dirty_list = ocf_lru_get_list(part, lru_list, false);
 
 	OCF_METADATA_LRU_LOCK(lru_list);
 
+#if OCF_LRU_DEBUG_PROFILE
+	t1 = env_get_tick_count();
+	env_atomic64_inc(&ocf_lru_prof_stats.clean_list_calls[lru_list]);
+#endif
+
 	ocf_lru_remove_locked(cache, dirty_list, cline);
 	add_lru_head(cache, clean_list, cline);
 
 	OCF_METADATA_LRU_UNLOCK(lru_list);
+
+#if OCF_LRU_DEBUG_PROFILE
+	t2 = env_get_tick_count();
+	env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.clean_total_ns);
+	env_atomic64_add(t1 - t0, &ocf_lru_prof_stats.clean_lock_wait_ns);
+	env_atomic64_add(t2 - t1, &ocf_lru_prof_stats.clean_body_ns);
+#endif
 }
 
 void ocf_lru_dirty_cline(ocf_cache_t cache, struct ocf_part *part,
@@ -1032,15 +1546,34 @@ void ocf_lru_dirty_cline(ocf_cache_t cache, struct ocf_part *part,
 	struct ocf_lru_list *clean_list;
 	struct ocf_lru_list *dirty_list;
 
+
+#if OCF_LRU_DEBUG_PROFILE
+	uint64_t t0, t1, t2;
+	env_atomic64_inc(&ocf_lru_prof_stats.dirty_calls);
+	t0 = env_get_tick_count();
+#endif
+
 	clean_list = ocf_lru_get_list(part, lru_list, true);
 	dirty_list = ocf_lru_get_list(part, lru_list, false);
 
 	OCF_METADATA_LRU_LOCK(lru_list);
 
+#if OCF_LRU_DEBUG_PROFILE
+	t1 = env_get_tick_count();
+	env_atomic64_inc(&ocf_lru_prof_stats.dirty_list_calls[lru_list]);
+#endif
+
 	ocf_lru_remove_locked(cache, clean_list, cline);
 	add_lru_head(cache, dirty_list, cline);
 
 	OCF_METADATA_LRU_UNLOCK(lru_list);
+
+#if OCF_LRU_DEBUG_PROFILE
+	t2 = env_get_tick_count();
+	env_atomic64_add(t2 - t0, &ocf_lru_prof_stats.dirty_total_ns);
+	env_atomic64_add(t1 - t0, &ocf_lru_prof_stats.dirty_lock_wait_ns);
+	env_atomic64_add(t2 - t1, &ocf_lru_prof_stats.dirty_body_ns);
+#endif
 }
 
 struct ocf_lru_populate_context {
