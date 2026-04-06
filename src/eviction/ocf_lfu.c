@@ -1605,14 +1605,15 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 /* Mark a cache line as dirty by moving it to the dirty list */
 void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
+
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+    ENV_BUG_ON(meta->freq >= LFU_MAX_FREQ);
+    
 #if OCF_LFU_DEBUG_PROFILE
     uint64_t t0, t1, t2;
 	env_atomic64_inc(&ocf_lfu_prof_stats.dirty_calls);
 	t0 = env_get_tick_count();
 #endif
-
-    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
-    ENV_BUG_ON(meta->freq >= LFU_MAX_FREQ);
 
     // Assert that cache line is currently not dirty
     // ENV_BUG_ON(metadata_test_dirty(cache, cline));
