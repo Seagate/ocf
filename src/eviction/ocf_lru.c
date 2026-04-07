@@ -1970,6 +1970,7 @@ int ocf_lru_restore_runtime(ocf_cache_t cache)
 		ocf_lru_init(cache, &cache->user_parts[part_id].part);
 
 	ocf_lru_init(cache, &cache->free);
+	ocf_lru_init(cache, &cache->free_detached);
 
 	// Restore clines
 	for (cline = 0; cline < entries; cline++) {
