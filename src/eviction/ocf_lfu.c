@@ -652,8 +652,8 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     env_atomic64_inc(&ocf_lfu_prof_stats.inc_bucket_change_calls);
 #endif
 
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, old_freq);
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, new_freq);
+    ocf_metadata_lfu_lock(&cache->metadata.lock, old_freq);
+    ocf_metadata_lfu_lock(&cache->metadata.lock, new_freq);
 
 #if OCF_LFU_DEBUG_PROFILE
     t1 = env_get_tick_count();
@@ -676,8 +676,8 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     t2 = env_get_tick_count();
 #endif
 
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, new_freq);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, old_freq);
+    ocf_metadata_lfu_unlock(&cache->metadata.lock, new_freq);
+    ocf_metadata_lfu_unlock(&cache->metadata.lock, old_freq);
 
 #if OCF_LFU_DEBUG_PROFILE
     t3 = env_get_tick_count();
@@ -931,9 +931,9 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
         uint32_t a = 0;
         uint32_t b = iter->current_freq;
 
-        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, a);
+        ocf_metadata_lfu_lock(&cache->metadata.lock, a);
         if (b != a)
-            ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
+            ocf_metadata_lfu_lock(&cache->metadata.lock, b);
 
 #if OCF_LFU_DEBUG_PROFILE
 		if (lists_scanned == 1)
@@ -941,7 +941,7 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
 #endif
 
         // Acquire lock for writing into the current bucket
-        // ocf_metadata_lfu_wr_lock(&cache->metadata.lock, iter->current_freq);
+        // ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_freq);
 
         bucket = ocf_lfu_get_list(part, iter->current_freq, iter->clean);
 
@@ -976,10 +976,10 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
 
         // Release write lock
         if (b != a)
-            ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, b);
-        ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, a);
+            ocf_metadata_lfu_unlock(&cache->metadata.lock, b);
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, a);
 
-        // ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, iter->current_freq);
+        // ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_freq);
 
         if (cline == END_MARKER || bucket->num_nodes == 0)
         {
@@ -1015,7 +1015,7 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
     env_atomic64_inc(&ocf_lfu_prof_stats.repart_calls);
 #endif
 
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, freq);
+    ocf_metadata_lfu_lock(&cache->metadata.lock, freq);
 
     /* revalidate after taking lock */
     ENV_BUG_ON(meta->freq != freq);
@@ -1023,7 +1023,7 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
 
     ocf_lfu_repart_locked(cache, cline, src_part, dst_part, freq, freq);
 
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, freq);
+    ocf_metadata_lfu_unlock(&cache->metadata.lock, freq);
 }
 
 /**
@@ -1075,9 +1075,9 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
         uint32_t a = 0;
         uint32_t b = iter->current_freq;
 
-        ocf_metadata_lfu_wr_lock(&cache->metadata.lock, a);
+        ocf_metadata_lfu_lock(&cache->metadata.lock, a);
         if (b != a)
-            ocf_metadata_lfu_wr_lock(&cache->metadata.lock, b);
+            ocf_metadata_lfu_lock(&cache->metadata.lock, b);
 
 #if OCF_LFU_DEBUG_PROFILE
 		if (lists_scanned == 1)
@@ -1115,8 +1115,8 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
 
         // Release write lock
         if (b != a)
-            ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, b);
-        ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, a);
+            ocf_metadata_lfu_unlock(&cache->metadata.lock, b);
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, a);
 
         if (cline == END_MARKER || bucket->num_nodes == 0)
         {
@@ -1632,7 +1632,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
     lock_idx = ocf_metadata_concurrency_next_idx(io_queue);
     ocf_metadata_start_shared_access(&cache->metadata.lock, lock_idx);
 
-    ocf_metadata_lfu_wr_lock_all(&cache->metadata.lock);
+    ocf_metadata_lfu_lock_all(&cache->metadata.lock);
 
     // Gather candidates by frequency (lowest first)
     lfu_iter_cleaning_init(&iter, cache, &user_part->part, list_idx);
@@ -1646,7 +1646,7 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
                                    &entries[i].core_id, &entries[i].core_line);
     }
 
-    ocf_metadata_lfu_wr_unlock_all(&cache->metadata.lock);
+    ocf_metadata_lfu_unlock_all(&cache->metadata.lock);
     ocf_metadata_end_shared_access(&cache->metadata.lock, lock_idx);
 
     if (i == 0)
@@ -1676,7 +1676,7 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     // ENV_BUG_ON(metadata_test_dirty(cache, cline));
 
     // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
+    ocf_metadata_lfu_lock(&cache->metadata.lock, meta->freq);
 
 #if OCF_LFU_DEBUG_PROFILE
 	t1 = env_get_tick_count();
@@ -1687,7 +1687,7 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     meta->clean = false;
     add_to_freq_bucket(meta->freq, cache, cline, false);
 
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
+    ocf_metadata_lfu_unlock(&cache->metadata.lock, meta->freq);
 
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -1713,7 +1713,7 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     // ENV_BUG_ON(!metadata_test_dirty(cache, cline));
 
     // QUESTION: Should we increment its frequency?
-    ocf_metadata_lfu_wr_lock(&cache->metadata.lock, meta->freq);
+    ocf_metadata_lfu_lock(&cache->metadata.lock, meta->freq);
 
 #if OCF_LFU_DEBUG_PROFILE
 	t1 = env_get_tick_count();
@@ -1723,7 +1723,7 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     remove_from_freq_bucket(meta->freq, cache, cline, meta->clean);
     meta->clean = true;
     add_to_freq_bucket(meta->freq, cache, cline, true);
-    ocf_metadata_lfu_wr_unlock(&cache->metadata.lock, meta->freq);
+    ocf_metadata_lfu_unlock(&cache->metadata.lock, meta->freq);
 
 #if OCF_LFU_DEBUG_PROFILE
 	t2 = env_get_tick_count();
