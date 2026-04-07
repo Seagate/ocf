@@ -2,12 +2,16 @@
 
 #define __EVICTION_LFU_STRUCTS_H__
 
+/* Raw hit counter is currently set to 32 because LFU_MAX_FREQ is 32 buckets */
+typedef uint32_t ocf_lfu_hits_t;
+
 struct ocf_lfu_meta {
     uint32_t freq;          // Access frequency counter
     uint32_t prev;          // For doubly linked list in freq bucket
     uint32_t next;
     bool clean;
     ocf_part_id_t partition_id;
+    ocf_lfu_hits_t hits;
 } __attribute__((packed));
 
 struct ocf_lfu_list {
