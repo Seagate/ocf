@@ -26,7 +26,7 @@ struct ocf_lfu_bucket {
 };
 
 struct ocf_lfu_part_runtime {
-	struct ocf_lfu_bucket freq_buckets[LFU_MAX_FREQ];
+	struct ocf_lfu_bucket freq_buckets[LFU_NUM_SHARDS][LFU_MAX_FREQ];
 };
 
 #endif

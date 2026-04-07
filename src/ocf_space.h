@@ -18,6 +18,8 @@
 	(((cline) / OCF_LRU_CHUNK_SIZE) % OCF_NUM_LRU_LISTS)
 
 #define LFU_MAX_FREQ 32  // Maximum frequency bucket count (tune as needed)
+#define LFU_NUM_SHARDS 32
+#define OCF_LFU_GET_SHARD_INDEX(cline) cline % LFU_NUM_SHARDS
 
 struct ocf_part;
 struct ocf_user_part;

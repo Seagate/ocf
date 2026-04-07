@@ -93,7 +93,7 @@ static inline void ocf_metadata_lfu_lock_all(
 {
 	uint32_t i;
 
-	for (i = 0; i < LFU_MAX_FREQ; i++)
+	for (i = 0; i < LFU_NUM_SHARDS; i++)
 		ocf_metadata_lfu_lock(metadata_lock, i);
 }
 
@@ -102,7 +102,7 @@ static inline void ocf_metadata_lfu_unlock_all(
 {
 	uint32_t i;
 
-	for (i = 0; i < LFU_MAX_FREQ; i++)
+	for (i = 0; i < LFU_NUM_SHARDS; i++)
 		ocf_metadata_lfu_unlock(metadata_lock, i);
 }
 

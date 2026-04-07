@@ -84,8 +84,15 @@ struct ocf_lfu_iter {
 	/* Optional request context */
 	struct ocf_request *req;
 
-	/* Start index for frequency buckets */
-	uint32_t current_freq;
+	/* Index for shard */
+	uint32_t current_shard;
+
+	/* Elements explored in the current shard */
+	uint32_t shard_element_idx;
+
+	/* Bitmap for non-empty shards 
+	rotated so that current @current_shard is on the most significant bit */
+	unsigned long long next_avail_shard;
 
 	/* If true, iterate only clean cachelines */
 	bool clean : 1;

@@ -24,7 +24,7 @@ int ocf_metadata_concurrency_init(struct ocf_metadata_lock *metadata_lock)
 			goto lru_err;
 	}
 
-	for(lfu_iter = 0; lfu_iter < LFU_MAX_FREQ; lfu_iter++) {
+	for(lfu_iter = 0; lfu_iter < LFU_NUM_SHARDS; lfu_iter++) {
 		err = env_spinlock_init(&metadata_lock->lfu[lfu_iter]);
 		if (err)
 			goto lfu_err;
@@ -71,7 +71,7 @@ void ocf_metadata_concurrency_deinit(struct ocf_metadata_lock *metadata_lock)
 	for (i = 0; i < OCF_USER_IO_CLASS_MAX; i++)
 		env_spinlock_destroy(&metadata_lock->partition[i]);
 
-	for (i = 0; i < LFU_MAX_FREQ; i++) {
+	for (i = 0; i < LFU_NUM_SHARDS; i++) {
 		env_spinlock_destroy(&metadata_lock->lfu[i]);
 	}
 
