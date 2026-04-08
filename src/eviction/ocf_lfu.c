@@ -15,7 +15,7 @@
 
 // DEBUG PROFILING
 #ifndef OCF_LFU_DEBUG_PROFILE
-#define OCF_LFU_DEBUG_PROFILE 1
+#define OCF_LFU_DEBUG_PROFILE 0
 #endif
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -345,7 +345,7 @@ static inline void ocf_lfu_prof_maybe_dump_inc(ocf_cache_t cache, u64 inc_call_n
 static inline void ocf_lfu_prof_maybe_dump_req(ocf_cache_t cache, u64 req_call_no) {}
 #endif
 
-static const uint32_t END_MARKER = (uint32_t)-1;
+static const ocf_cache_line_t END_MARKER = OCF_CACHE_LINE_INVALID;
 
 /* Helper to get the partition eviction runtime information */
 static inline struct ocf_lfu_part_runtime *ocf_part_lfu(struct ocf_part *part)
@@ -390,7 +390,6 @@ static inline uint32_t ocf_lfu_hits_to_freq(ocf_lfu_hits_t hits)
     }
 
     return (bucket < (LFU_MAX_FREQ - 1)) ? bucket : (LFU_MAX_FREQ - 1);
-    ;
 }
 
 /** Get cache partition that cache line belongs to */
@@ -497,9 +496,8 @@ static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_
 {
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
-    // ocf_cache_log(cache, log_debug, "[add_to_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, meta->freq, list->num_nodes,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_list] before | req: cline=%u meta_freq=%u list_nodes=%u\n",
+    //               cline, meta->freq, list->num_nodes);
 
     meta->prev = END_MARKER;
     meta->next = list->head;
@@ -516,22 +514,21 @@ static void add_to_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_cache_
 
     list->num_nodes++;
 
-    // ocf_cache_log(cache, log_debug, "[add_to_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, meta->freq, list->num_nodes,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_list] after | req: cline=%u meta_freq=%u list_nodes=%u\n",
+    //               cline, meta->freq, list->num_nodes);
 }
 
-/** Add cache line to frequency bucket list head */
+/** Add cache line to frequency bucket list head 
+ * Caller must hold write locks
+*/
 static inline void add_to_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
 {
     struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, OCF_LFU_GET_SHARD_INDEX(cline), freq, clean);
 
     // bool clean_current = !metadata_test_dirty(cache, cline);
-
-    // ocf_cache_log(cache, log_debug, "[add_to_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[add_to_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u\n",
+    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail);
 
     add_to_list(list, cache, cline);
 }
@@ -554,9 +551,8 @@ static void remove_from_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_c
     else
         ENV_BUG_ON(ocf_metadata_get_lfu(cache, meta->next)->prev != cline);
 
-    // ocf_cache_log(cache, log_debug, "[remove_from_list] before | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, meta->freq, list->num_nodes,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_list] before | req: cline=%u meta_freq=%u list_nodes=%u\n",
+    //               cline, meta->freq, list->num_nodes);
 
     if (meta->prev != END_MARKER)
     {
@@ -583,22 +579,21 @@ static void remove_from_list(struct ocf_lfu_list *list, ocf_cache_t cache, ocf_c
 
     list->num_nodes--;
 
-    // ocf_cache_log(cache, log_debug, "[remove_from_list] after | req: cline=%u meta_freq=%u list_nodes=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, meta->freq, list->num_nodes,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_list] after | req: cline=%u meta_freq=%u list_nodes=%u\n",
+    //               cline, meta->freq, list->num_nodes);
 }
 
-/** Remove cache line from its current freq bucket */
+/** Remove cache line from its current freq bucket 
+ * Caller must hold write locks
+*/
 static inline void remove_from_freq_bucket(uint32_t freq, ocf_cache_t cache, ocf_cache_line_t cline, bool clean)
 {
     struct ocf_part *part = lfu_get_cline_part(cache, cline);
     struct ocf_lfu_list *list = ocf_lfu_get_list(part, OCF_LFU_GET_SHARD_INDEX(cline), freq, clean);
 
     // bool clean_current = !metadata_test_dirty(cache, cline);
-
-    // ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u cpu=%u pid=%d comm=%s\n",
-    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail,
-    //               raw_smp_processor_id(), current->pid, current->comm);
+    // ocf_cache_log(cache, log_debug, "[remove_from_freq_bucket] req: cline=%u part=%p freq_arg=%u clean_arg=%d clean=%d meta_clean=%d list_nodes=%u head=%u tail=%u\n",
+    //               cline, part, freq, clean, clean_current, ocf_metadata_get_lfu(cache, cline)->clean, list->num_nodes, list->head, list->tail);
 
     ENV_BUG_ON(list->num_nodes == 0);
 
@@ -611,10 +606,6 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t old_freq, new_freq;
     ocf_lfu_hits_t old_hits, new_hits;
-
-    struct ocf_part *part;
-    struct ocf_lfu_list *src_list, *dst_list;
-    bool clean;
     uint32_t shard_idx;
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -662,20 +653,11 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 #if OCF_LFU_DEBUG_PROFILE
     t1 = env_get_tick_count();
 #endif
-    part = &cache->user_parts[meta->partition_id].part;
-    clean = meta->clean;
 
-    src_list = ocf_lfu_get_list(part, shard_idx, old_freq, clean);
-    dst_list = ocf_lfu_get_list(part, shard_idx, new_freq, clean);
-
-    // ocf_lfu_remove(cache, cline);
-    remove_from_list(src_list, cache, cline);
-
+    ocf_lfu_remove(cache, cline);
+    meta->hits = new_hits;
     meta->freq = new_freq;
-
-    add_to_list(dst_list, cache, cline);
-
-    // add_to_freq_bucket(new_freq, cache, cline, meta->clean);
+    add_to_freq_bucket(meta->freq, cache, cline, meta->clean);
 
 #if OCF_LFU_DEBUG_PROFILE
     t2 = env_get_tick_count();
@@ -692,7 +674,9 @@ void ocf_lfu_increment(ocf_cache_t cache, ocf_cache_line_t cline)
 #endif
 }
 
-/** Add a new cache line to freq bucket 0 on insertion */
+/** Add a new cache line to freq bucket 0 on insertion 
+ * Caller must hold write locks
+*/
 void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 #if OCF_LFU_DEBUG_PROFILE
@@ -700,7 +684,7 @@ void ocf_lfu_add(ocf_cache_t cache, ocf_cache_line_t cline)
 #endif
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     meta->hits = 1;
-    meta->freq = ocf_lfu_hits_to_freq(meta->hits);
+    meta->freq = 0;
     meta->clean = !metadata_test_dirty(cache, cline);
     add_to_freq_bucket(meta->freq, cache, cline, meta->clean);
 }
@@ -905,26 +889,22 @@ static inline bool _lfu_iter_eviction_lock(struct ocf_lfu_iter *iter,
 }
 
 /** Move cache line to another cache partition
- * Caller must acquire write locks
+ * Caller must acquire shard locks
  */
 static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
-                                  struct ocf_part *src, struct ocf_part *dst,
-                                  uint32_t src_freq, uint32_t dst_freq)
+                                  struct ocf_part *src, struct ocf_part *dst)
 {
     struct ocf_lfu_list *src_list, *dst_list;
     struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
-    // ocf_cache_log(cache, log_debug, "Frequency of cacheline to move: %u",
-    //                   src_freq);
+    // ocf_cache_log(cache, log_debug, "[ocf_lfu_repart_locked]");
 
-    ENV_BUG_ON(src_freq >= LFU_MAX_FREQ);
-    ENV_BUG_ON(dst_freq >= LFU_MAX_FREQ);
     ENV_BUG_ON(src == dst);
 
     bool clean = meta->clean;
     uint32_t shard_idx = OCF_LFU_GET_SHARD_INDEX(cline);
-    src_list = ocf_lfu_get_list(src, shard_idx, src_freq, clean);
-    dst_list = ocf_lfu_get_list(dst, shard_idx, dst_freq, clean);
+    src_list = ocf_lfu_get_list(src, shard_idx, meta->freq, clean);
+    dst_list = ocf_lfu_get_list(dst, shard_idx, meta->freq, clean);
 
     ENV_BUG_ON(src_list->num_nodes == 0);
     if (src_list->head == END_MARKER)
@@ -937,8 +917,6 @@ static void ocf_lfu_repart_locked(ocf_cache_t cache, ocf_cache_line_t cline,
 
     // Step 2: Insert into destination list at head
     add_to_list(dst_list, cache, cline);
-
-    meta->freq = dst_freq;
 
     // Step 3: Update partition metadata
     ocf_metadata_set_partition_id(cache, cline, dst->id);
@@ -959,6 +937,7 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
 
 #if OCF_LFU_DEBUG_PROFILE
     uint64_t t0, t1 = 0, t2;
+    uint64_t shards_scanned = 0;
     uint64_t lists_scanned = 0;
     uint64_t clines_scanned = 0;
 
@@ -969,18 +948,22 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
     // Starting from the lowest frequency
     do
     {
-        _lfu_iter_advance_shard(iter);
+        lfu_iter_advance(iter);
+
+        // Acquire shard lock
+        ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
+
+#if OCF_LFU_DEBUG_PROFILE
+        shards_scanned++;
+        if (shards_scanned == 1)
+            t1 = env_get_tick_count();
+#endif
+
+        // Look through all the shards
         for (f = 0; f < LFU_MAX_FREQ; f++)
         {
 #if OCF_LFU_DEBUG_PROFILE
             lists_scanned++;
-#endif
-
-            ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
-
-#if OCF_LFU_DEBUG_PROFILE
-            if (lists_scanned == 1)
-                t1 = env_get_tick_count();
 #endif
 
             bucket = ocf_lfu_get_list(part, iter->current_shard, f, iter->clean);
@@ -1010,17 +993,20 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
                 // Move to target partition at bucket 0
                 if (dst_part != part)
                 {
-                    ocf_lfu_repart_locked(cache, cline, part, dst_part, f, 0);
+                    ocf_lfu_repart_locked(cache, cline, part, dst_part);
+
+                    ocf_lfu_remove(cache, cline);
+                    ocf_lfu_add(cache, cline);
                 }
 
                 ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
 
                 goto out;
             }
-
-            // Release lock
-            ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
         }
+
+        // Release shard lock
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
 
         if (cline == END_MARKER && !_lfu_shard_is_empty(iter))
         {
@@ -1063,7 +1049,7 @@ void ocf_lfu_repart(ocf_cache_t cache, ocf_cache_line_t cline,
     ENV_BUG_ON(meta->freq != freq);
     ENV_BUG_ON(lfu_get_cline_part(cache, cline) != src_part);
 
-    ocf_lfu_repart_locked(cache, cline, src_part, dst_part, freq, freq);
+    ocf_lfu_repart_locked(cache, cline, src_part, dst_part);
 
     ocf_metadata_lfu_unlock(&cache->metadata.lock, shard_idx);
 }
@@ -1098,6 +1084,7 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
 
 #if OCF_LFU_DEBUG_PROFILE
     uint64_t t0, t1 = 0, t2;
+    uint64_t shards_scanned = 0;
     uint64_t lists_scanned = 0;
     uint64_t clines_scanned = 0;
 
@@ -1112,18 +1099,21 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
     {
         lfu_iter_advance(iter);
 
+        // Acquire shard lock
+        ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
+
+#if OCF_LFU_DEBUG_PROFILE
+        shards_scanned++;
+        if (shards_scanned == 1)
+            t1 = env_get_tick_count();
+#endif
+
+        // Look through all the buckets in the shard
         for (f = 0; f < LFU_MAX_FREQ; f++)
         {
 
 #if OCF_LFU_DEBUG_PROFILE
             lists_scanned++;
-#endif
-
-            ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
-
-#if OCF_LFU_DEBUG_PROFILE
-            if (lists_scanned == 1)
-                t1 = env_get_tick_count();
 #endif
 
             // Get the current bucket
@@ -1151,18 +1141,20 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
                 env_atomic64_inc(
                     &ocf_lfu_prof_stats.free_found_freq[f]);
 #endif
-                // Move cacheline from free partition to destination
-                ocf_lfu_repart_locked(cache, cline, free, dst_part, f, 0);
+                // Move cacheline from free partition to destination at bucket 0
+                ocf_lfu_repart_locked(cache, cline, free, dst_part);
+                ocf_lfu_remove(cache, cline);
+                ocf_lfu_add(cache, cline);
                 
                 // Release lock
                 ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
                 
                 goto out;
             }
-
-            // Release write lock
-            ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
         }
+
+        // Release shard lock
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
 
         if (cline == END_MARKER && !_lfu_shard_is_empty(iter))
         {
@@ -1185,6 +1177,99 @@ out:
 #endif
 
     return cline;
+}
+
+/**
+ * Get next clean cacheline from the lowest frequency bucket of the current shard.
+ * Caller must not hold any shard lock.
+ * - the function doesn't return cache lines from freelist
+ * - returned cacheline is write locked
+ * - returned cacheline has the corresponding metadata hash bucket write locked
+ * - cacheline is moved to the head of destination partition shard before
+ *   being returned.
+ * All this is packed into a single function to lock shard once per each
+ * replaced cacheline.
+*/
+static inline ocf_cache_line_t lfu_req_next_cline(struct ocf_request *req,
+		ocf_cache_t cache, struct ocf_lfu_iter *iter,
+		ocf_cache_line_t cline, struct ocf_part *dst_part,
+		ocf_core_id_t *core_id, uint64_t *core_line,
+		ocf_part_id_t *src_part_id)
+{
+    uint32_t current_shard = OCF_LFU_GET_SHARD_INDEX(cline);
+    struct ocf_alock *c = iter->c;
+    struct ocf_part *part;
+    ocf_cache_line_t ret = END_MARKER;
+    ocf_core_id_t t_core_id;
+    uint64_t t_core_line;
+    ocf_part_id_t tmp_part_id;
+    struct ocf_lfu_meta *meta;
+    uint32_t f;
+
+    // Lock the current shard
+    ocf_metadata_lfu_lock(&cache->metadata.lock, current_shard);
+
+    // Get partition ID of current cache line
+    tmp_part_id = ocf_metadata_get_partition_id(cache, cline);
+
+    if(tmp_part_id == PARTITION_FREELIST)
+        goto lfu_unlock; // Skip if it's from freelist
+
+    if(!cache->user_parts[tmp_part_id].config->flags.eviction)
+        goto lfu_unlock; // Skip if it belongs to a priority partition
+
+    if(!ocf_cache_line_try_lock_wr(c, cline)) 
+        goto lfu_unlock; // Skip if you cannot acquire cline write lock
+
+    ocf_metadata_get_core_info(cache, cline, &t_core_id, &t_core_line);
+	if ((t_core_id == ocf_core_get_id(req->core))
+		&& (t_core_line >= req->core_line_first)
+		&& (t_core_line <= req->core_line_last))
+		goto line_unlock_wr; 
+
+    meta = ocf_metadata_get_lfu(cache, cline);
+
+	if (!metadata_test_dirty(cache, cline) || !meta->clean)
+		goto line_unlock_wr; // Skip if cache line is dirty
+
+	if (!_lfu_trylock_hash(iter, t_core_id, t_core_line))
+		goto line_unlock_wr; // Skip if you can't take hash bucket lock
+
+    *src_part_id = tmp_part_id;
+    *core_id = t_core_id;
+	*core_line = t_core_line;
+	part = &cache->user_parts[*src_part_id].part;
+
+    // TODO: How to make this more efficient?
+    if (meta->freq != 0) {
+        for(f = 0; f < meta->freq; f++) {
+            if (ocf_lfu_get_list(part, current_shard, f, meta->clean)->num_nodes != 0)
+                goto line_unlock_wr; // Check if it's LFU in that shard
+        }
+    }
+
+	if (dst_part->id != *src_part_id) {
+		ocf_lfu_repart_locked(cache, cline, part, dst_part);
+        ocf_lfu_remove(cache, cline);
+        ocf_lfu_add(cache, cline);
+	} else {
+        ocf_lfu_remove(cache, cline);
+
+        meta->hits = ocf_lfu_increment_hits(meta->hits);
+        meta->freq = ocf_lfu_hits_to_freq(meta->hits);
+        
+        add_to_freq_bucket(meta->freq, cache, cline, meta->clean);
+	}
+
+	lfu_iter_advance(iter);
+	ret = cline;
+
+line_unlock_wr:
+	if (ret == END_MARKER)
+		ocf_cache_line_unlock_wr(c, cline);
+lfu_unlock:
+	ocf_metadata_lfu_unlock(&cache->metadata.lock, current_shard);
+	return ret;
 }
 
 /**
@@ -1250,8 +1335,8 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
     ENV_BUG_ON(req->part_id == PARTITION_FREELIST);
     dst_part = &cache->user_parts[req->part_id].part;
 
-    // Initialize the LFU iterator from shard index, starting from lowest frequency bucket
-    shard_idx = req->io_queue->lru_idx++ % LFU_MAX_FREQ;
+    // Initialize the LFU iterator from shard index
+    shard_idx = req->io_queue->lru_idx++ % LFU_NUM_SHARDS;
     lfu_iter_eviction_init(&iter, cache, src_part, shard_idx, req);
 
     // Try to assign 'cline_no' cache lines
@@ -1263,6 +1348,21 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
         // Select next candidate cache line depending on source partition
         if (src_part->id != PARTITION_FREELIST)
         {
+            /*
+             * Try to evict contiguous cache lines:
+			 * Check if there is a sequential successor line.
+			 * We know that end_marker > number of cache lines,
+			 * so this is also an end_marker check.
+			 */
+			if (cline < cache->conf_meta->cachelines - 1) {
+				cline = lfu_req_next_cline(req, cache, &iter,
+						cline + 1, dst_part,
+						&core_id, &core_line,
+						&actual_src_part_id);
+				if (cline != END_MARKER)
+					goto got_cline;
+			}
+
             actual_src_part_id = src_part->id;
             cline = lfu_iter_eviction_next(&iter, dst_part, &core_id, &core_line);
         }
@@ -1276,6 +1376,7 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
         if (cline == END_MARKER)
             break;
 
+got_cline:
         // Sanity check: we should not be assigning dirty cache lines (clean eviction)
         ENV_BUG_ON(metadata_test_dirty(cache, cline));
 
@@ -1322,7 +1423,7 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
          * self-eviction), curr_size was incremented. Stop if the
          * destination partition has reached its occupancy limit.
          * This bounds the TOCTOU race in ocf_user_part_has_space()
-         * to at most OCF_NUM_LRU_LISTS cache lines of overshoot.
+         * to at most LFU_NUM_SHARDS cache lines of overshoot.
          */
         if (actual_src_part_id != dst_part->id &&
             (uint32_t)env_atomic_read(
@@ -1370,34 +1471,59 @@ static int ocf_lfu_populate_handle(ocf_parallelize_t parallelize,
     ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
     struct ocf_generator_bisect_state generator;
     struct ocf_lfu_list *list;
-    // unsigned freq = shard_id;
     unsigned step = 0;
-    uint32_t portion, offset;
-    uint32_t i, idx;
+    uint32_t num_full_chunks = entries / OCF_LFU_STRIPE_SIZE;
+    uint32_t remainder = entries % OCF_LFU_STRIPE_SIZE;
+    uint32_t partial_chunk_lines = 0;
+	uint32_t num_chunks, chunk_idx, chunk_lines;
+    uint32_t ci, j;
 
-    portion = OCF_DIV_ROUND_UP((uint64_t)entries, shards_cnt);
-    offset = shard_id * portion / shards_cnt;
-    ocf_generator_bisect_init(&generator, portion, offset);
+    /* Check if this shard has a partial last chunk */
+	if (remainder > (uint32_t)shard_id * LFU_CHUNK_SIZE) {
+		partial_chunk_lines = remainder -
+				(uint32_t)shard_id * LFU_CHUNK_SIZE;
+		if (partial_chunk_lines > LFU_CHUNK_SIZE)
+			partial_chunk_lines = LFU_CHUNK_SIZE;
+	}
+
+	num_chunks = num_full_chunks + (partial_chunk_lines > 0 ? 1 : 0);
+	if (num_chunks == 0)
+		return 0;
+
+	ocf_generator_bisect_init(&generator, num_chunks, 0);
 
     list = ocf_lfu_get_list(&cache->free, shard_id, 0, true);
 
     cnt = 0;
-    for (i = 0; i < portion; i++)
+    for (ci = 0; ci < num_chunks; ci++)
     {
-        OCF_COND_RESCHED_DEFAULT(step);
+        chunk_idx = ocf_generator_bisect_next(&generator);
 
-        idx = ocf_generator_bisect_next(&generator);
-        cline = idx * shards_cnt + shard_id;
-        if (cline >= entries)
-            continue;
+		if (chunk_idx == num_full_chunks)
+			chunk_lines = partial_chunk_lines;
+		else
+			chunk_lines = LFU_CHUNK_SIZE;
 
-        ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
+        for(j = 0; j < chunk_lines; j++) {
+            OCF_COND_RESCHED_DEFAULT(step);
 
-        ocf_lfu_init_cline(cache, cline);
-        // ocf_metadata_get_lfu(cache, cline)->freq = freq;
-        add_to_list(list, cache, cline);
+            uint32_t stripe = chunk_idx * LFU_NUM_SHARDS + shard_id;
+            cline = stripe * LFU_CHUNK_SIZE + j;
 
-        cnt++;
+            ENV_BUG_ON(cline >= entries);
+            
+            // Put into freelist
+            ocf_metadata_set_partition_id(cache, cline, PARTITION_FREELIST);
+
+            // Reset cline metadata
+            ocf_lfu_init_cline(cache, cline);
+            // ocf_metadata_get_lfu(cache, cline)->freq = freq;
+
+            // Add to the list
+            add_to_list(list, cache, cline);
+
+            cnt++;
+        }
     }
 
     env_atomic_add(cnt, &context->curr_size);
@@ -1711,8 +1837,6 @@ void ocf_lfu_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 /* Mark a cache line as dirty by moving it to the dirty list */
 void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
-
-    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t shard_idx = OCF_LFU_GET_SHARD_INDEX(cline);
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -1727,6 +1851,12 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_lock(&cache->metadata.lock, shard_idx);
 
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
+    
+    // bool clean_current = !metadata_test_dirty(cache, cline);
+    // ocf_cache_log(cache, log_debug, "[ocf_lfu_dirty_cline] req: cline=%u part=%p clean=%d meta_clean=%d\n",
+    //               cline, part, clean_current, meta->clean);
+                  
 #if OCF_LFU_DEBUG_PROFILE
     t1 = env_get_tick_count();
     env_atomic64_inc(&ocf_lfu_prof_stats.dirty_freq_calls[meta->freq]);
@@ -1749,7 +1879,6 @@ void ocf_lfu_dirty_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 /* Mark a cache line as clean by moving it to the clean list */
 void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_line_t cline)
 {
-    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
     uint32_t shard_idx = OCF_LFU_GET_SHARD_INDEX(cline);
 
 #if OCF_LFU_DEBUG_PROFILE
@@ -1763,6 +1892,8 @@ void ocf_lfu_clean_cline(ocf_cache_t cache, struct ocf_part *part, ocf_cache_lin
 
     // QUESTION: Should we increment its frequency?
     ocf_metadata_lfu_lock(&cache->metadata.lock, shard_idx);
+
+    struct ocf_lfu_meta *meta = ocf_metadata_get_lfu(cache, cline);
 
 #if OCF_LFU_DEBUG_PROFILE
     t1 = env_get_tick_count();
@@ -1821,9 +1952,9 @@ static int ocf_lfu_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
         list = ocf_lfu_get_list(part, shard_idx, node->freq, true);
         env_atomic_inc(&cache->free.runtime->curr_size);
 
-        ocf_cache_log(cache, log_debug,
-                      "[ocf_lfu_restore_cline] cline=%u prev=%u next=%u freq=%u clean=%d\n",
-                      cline, node->prev, node->next, node->freq, node->clean);
+        // ocf_cache_log(cache, log_debug,
+        //               "[ocf_lfu_restore_cline] cline=%u prev=%u next=%u freq=%u clean=%d\n",
+        //               cline, node->prev, node->next, node->freq, node->clean);
     }
     else
     {
