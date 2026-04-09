@@ -2012,11 +2012,11 @@ static void _ocf_mngt_init_eviction(ocf_pipeline_t pipeline,
 	cache->eviction_policy = cache->conf_meta->eviction_policy_type;
 
 	ret = __init_eviction_policy(cache);
+	context->flags.eviction_initialized = true;
 
 	if (ret)
 		OCF_PL_FINISH_RET(pipeline, ret);
 
-	context->flags.eviction_initialized = true;
 
 	ocf_cache_log(cache, log_debug,
 					  "[_ocf_mngt_init_eviction] cache->eviction_policy = %d\n", cache->eviction_policy);
