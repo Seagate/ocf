@@ -87,12 +87,9 @@ struct ocf_lfu_iter {
 	/* Index for shard */
 	uint32_t current_shard;
 
-	/* Elements explored in the current shard */
-	uint32_t shard_element_idx;
+	uint32_t current_freq;
 
-	/* Bitmap for non-empty shards 
-	rotated so that current @current_shard is on the most significant bit */
-	unsigned long long next_avail_shard;
+	ocf_cache_line_t last_cline;
 
 	/* If true, iterate only clean cachelines */
 	bool clean : 1;

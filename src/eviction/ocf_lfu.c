@@ -770,50 +770,13 @@ static inline void lfu_iter_init(struct ocf_lfu_iter *iter,
     iter->c = ocf_cache_line_concurrency(cache);
     iter->part = part;
     iter->current_shard = start_shard;
+    iter->current_freq = 0;
     iter->clean = clean;
+    iter->last_cline = END_MARKER;
     iter->hash_locked = hash_locked;
     iter->req = req;
 }
 
-/**
- * Utility functions for iterators
- */
-
-static inline void _lfu_iter_advance_shard(struct ocf_lfu_iter *iter)
-{
-    unsigned increment;
-
-    increment = __builtin_ffsll(iter->next_avail_shard);
-    iter->next_avail_shard = ocf_rotate_right(iter->next_avail_shard,
-                                              increment, LFU_NUM_SHARDS);
-    iter->current_shard = (iter->current_shard + increment) % LFU_NUM_SHARDS;
-}
-
-static inline bool _lfu_shard_is_empty(struct ocf_lfu_iter *iter)
-{
-    return !(iter->next_avail_shard & (1ULL << (LFU_NUM_SHARDS - 1)));
-}
-
-static inline uint32_t lfu_iter_advance(struct ocf_lfu_iter *iter)
-{
-    iter->shard_element_idx++;
-    if ((iter->shard_element_idx >= 256) || _lfu_shard_is_empty(iter))
-    {
-        _lfu_iter_advance_shard(iter);
-        iter->shard_element_idx = 0;
-    }
-    return iter->current_shard;
-}
-
-static inline void _lfu_shard_set_empty(struct ocf_lfu_iter *iter)
-{
-    iter->next_avail_shard &= ~(1ULL << (LFU_NUM_SHARDS - 1));
-}
-
-static inline bool _lfu_shards_all_empty(struct ocf_lfu_iter *iter)
-{
-    return iter->next_avail_shard == 0;
-}
 
 /** Initialize LFU eviction iterator */
 static inline void lfu_iter_eviction_init(struct ocf_lfu_iter *iter,
@@ -934,10 +897,11 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
     struct ocf_lfu_list *bucket;
     ocf_cache_line_t cline;
     uint32_t f;
+    uint32_t shard_idx;
+    uint32_t shards_scanned = 0;
 
 #if OCF_LFU_DEBUG_PROFILE
     uint64_t t0, t1 = 0, t2;
-    uint64_t shards_scanned = 0;
     uint64_t lists_scanned = 0;
     uint64_t clines_scanned = 0;
 
@@ -948,25 +912,29 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
     // Starting from the lowest frequency
     do
     {
-        lfu_iter_advance(iter);
+        iter->current_shard = (iter->current_shard + 1) % LFU_NUM_SHARDS;
+        shard_idx = iter->current_shard;
+
+        shards_scanned++;
 
         // Acquire shard lock
-        ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
-
+        ocf_metadata_lfu_lock(&cache->metadata.lock, shard_idx);
+        
 #if OCF_LFU_DEBUG_PROFILE
-        shards_scanned++;
         if (shards_scanned == 1)
             t1 = env_get_tick_count();
 #endif
 
-        // Look through all the shards
+        // Look through all the freqs
         for (f = 0; f < LFU_MAX_FREQ; f++)
         {
 #if OCF_LFU_DEBUG_PROFILE
             lists_scanned++;
 #endif
+            // Update iter->current_freq even though it's not useful for this one
+            iter->current_freq = f;
 
-            bucket = ocf_lfu_get_list(part, iter->current_shard, f, iter->clean);
+            bucket = ocf_lfu_get_list(part, shard_idx, f, iter->clean);
 
             // Get the tail (LRU of the bucket)
             cline = bucket->tail;
@@ -999,21 +967,15 @@ static inline ocf_cache_line_t lfu_iter_eviction_next(struct ocf_lfu_iter *iter,
                     ocf_lfu_add(cache, cline);
                 }
 
-                ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
-
+                ocf_metadata_lfu_unlock(&cache->metadata.lock, shard_idx);
                 goto out;
             }
         }
 
         // Release shard lock
-        ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
-
-        if (cline == END_MARKER && !_lfu_shard_is_empty(iter))
-        {
-            _lfu_shard_set_empty(iter);
-        }
-
-    } while (cline == END_MARKER && !_lfu_shards_all_empty(iter));
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, shard_idx);
+        
+    } while (cline == END_MARKER && shards_scanned < LFU_NUM_SHARDS);
 
 out:
 #if OCF_LFU_DEBUG_PROFILE
@@ -1080,11 +1042,10 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
     struct ocf_part *free = iter->part;
     struct ocf_lfu_list *bucket;
     ocf_cache_line_t cline;
-    uint32_t f;
+    uint32_t f, shard_idx, shards_scanned = 0;
 
 #if OCF_LFU_DEBUG_PROFILE
     uint64_t t0, t1 = 0, t2;
-    uint64_t shards_scanned = 0;
     uint64_t lists_scanned = 0;
     uint64_t clines_scanned = 0;
 
@@ -1097,13 +1058,15 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
 
     do
     {
-        lfu_iter_advance(iter);
+        iter->current_shard = (iter->current_shard + 1) % LFU_NUM_SHARDS;
+        shard_idx = iter->current_shard;
+
+        shards_scanned++;
 
         // Acquire shard lock
-        ocf_metadata_lfu_lock(&cache->metadata.lock, iter->current_shard);
+        ocf_metadata_lfu_lock(&cache->metadata.lock, shard_idx);
 
 #if OCF_LFU_DEBUG_PROFILE
-        shards_scanned++;
         if (shards_scanned == 1)
             t1 = env_get_tick_count();
 #endif
@@ -1111,13 +1074,15 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
         // Look through all the buckets in the shard
         for (f = 0; f < LFU_MAX_FREQ; f++)
         {
+            // Update iter->current_freq even though it's not useful for this one
+            iter->current_freq = f;
 
 #if OCF_LFU_DEBUG_PROFILE
             lists_scanned++;
 #endif
 
             // Get the current bucket
-            bucket = ocf_lfu_get_list(free, iter->current_shard, f, true);
+            bucket = ocf_lfu_get_list(free, shard_idx, f, true);
             cline = bucket->tail;
 
             // ocf_cache_log(cache, log_debug, "[lfu_iter_free_next] cline: %u", cline);
@@ -1147,21 +1112,16 @@ static inline ocf_cache_line_t lfu_iter_free_next(struct ocf_lfu_iter *iter,
                 ocf_lfu_add(cache, cline);
                 
                 // Release lock
-                ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
-                
+                ocf_metadata_lfu_unlock(&cache->metadata.lock, shard_idx);
+
                 goto out;
             }
         }
 
         // Release shard lock
-        ocf_metadata_lfu_unlock(&cache->metadata.lock, iter->current_shard);
+        ocf_metadata_lfu_unlock(&cache->metadata.lock, shard_idx);
 
-        if (cline == END_MARKER && !_lfu_shard_is_empty(iter))
-        {
-            _lfu_shard_set_empty(iter);
-        }
-
-    } while (cline == END_MARKER && !_lfu_shards_all_empty(iter));
+    } while (cline == END_MARKER && shards_scanned < LFU_NUM_SHARDS);
 
 out:
 #if OCF_LFU_DEBUG_PROFILE
@@ -1261,7 +1221,7 @@ static inline ocf_cache_line_t lfu_req_next_cline(struct ocf_request *req,
         add_to_freq_bucket(meta->freq, cache, cline, meta->clean);
 	}
 
-	lfu_iter_advance(iter);
+	iter->current_shard = (iter->current_shard + 1) % LFU_NUM_SHARDS;
 	ret = cline;
 
 line_unlock_wr:
@@ -1295,7 +1255,7 @@ uint32_t ocf_lfu_req_clines(struct ocf_request *req,
     struct ocf_alock *alock;
     struct ocf_lfu_iter iter;
     uint32_t i = 0;
-    ocf_cache_line_t cline;
+    ocf_cache_line_t cline = END_MARKER;
     uint64_t core_line;
     ocf_core_id_t core_id;
     ocf_cache_t cache = req->cache;
@@ -1711,42 +1671,76 @@ static inline void lfu_iter_cleaning_init(struct ocf_lfu_iter *iter,
  * is read or write locked, depending on iter->write_lock */
 static inline ocf_cache_line_t lfu_iter_cleaning_next(struct ocf_lfu_iter *iter)
 {
-    ocf_cache_line_t cline;
+    ocf_cache_line_t cline, next, start;
     struct ocf_lfu_list *list;
-    uint32_t f;
 
-    do
-    {
-        for (f = 0; f < LFU_MAX_FREQ; f++)
-        {
-            list = ocf_lfu_get_list(iter->part, iter->current_shard, f, iter->clean);
-            cline = list->tail;
+    /* Rotating counters */
+    uint32_t scanned_shards = 0;
+    uint32_t scanned_freqs;
 
-            // Try to get the least recently used dirty cacheline that can be cleaned
-            // If the current one is locked, get the previous one
-            while (cline != END_MARKER && !ocf_cache_line_try_lock_rd(
-                                              iter->c, cline))
-            {
-                cline = ocf_metadata_get_lfu(iter->cache, cline)->prev;
+    do {
+        scanned_freqs = 0;
+
+        while (scanned_freqs < LFU_MAX_FREQ) {
+
+            list = ocf_lfu_get_list(iter->part,
+                                    iter->current_shard,
+                                    iter->current_freq,
+                                    false); // dirty
+
+            /* Start from last position OR tail */
+            if (iter->last_cline != END_MARKER)
+                cline = iter->last_cline;
+            else
+                cline = list->tail;
+
+            start = cline;
+
+            while (cline != END_MARKER) {
+                next = ocf_metadata_get_lfu(iter->cache, cline)->prev;
+
+                if (ocf_cache_line_try_lock_rd(iter->c, cline)) {
+
+                    if (!metadata_test_dirty(iter->cache, cline)) {
+                        ocf_cache_line_unlock_rd(iter->c, cline);
+                    } else {
+                        /* Advance cursor */
+                        iter->last_cline = next;
+                        return cline;
+                    }
+                }
+
+                cline = next;
+
+                /* Prevent re-scanning same bucket */
+                if (cline == start)
+                    break;
             }
 
-            // If you manage to get a line
-            if (cline != END_MARKER)
-            {
-                return cline; // got one
+            /* Bucket exhausted -> reset cursor */
+            iter->last_cline = END_MARKER;
+
+            /* Move to next frequency */
+            iter->current_freq++;
+            if (iter->current_freq == LFU_MAX_FREQ) {
+                iter->current_freq = 0;
+                break;
             }
 
+            scanned_freqs++;
         }
 
-        // Either empty OR all locked: try next shard
-        if (cline == END_MARKER && !_lfu_shard_is_empty(iter)) {
-			/* mark shard as empty */
-			_lfu_shard_set_empty(iter);
-		}
+        /* Move to next shard */
+        iter->current_shard =
+            (iter->current_shard + 1) % LFU_NUM_SHARDS;
 
-    } while (cline == END_MARKER && !_lfu_shards_all_empty(iter));
+        iter->last_cline = END_MARKER;
 
-    return cline;
+        scanned_shards++;
+
+    } while (scanned_shards < LFU_NUM_SHARDS);
+
+    return END_MARKER;
 }
 
 static void ocf_lfu_clean_end(void *private_data, int error)

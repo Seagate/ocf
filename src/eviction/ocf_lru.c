@@ -26,7 +26,7 @@ static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
 
 // DEBUG PROFILING
 #ifndef OCF_LRU_DEBUG_PROFILE
-#define OCF_LRU_DEBUG_PROFILE 1
+#define OCF_LRU_DEBUG_PROFILE 0
 #endif
 
 #if OCF_LRU_DEBUG_PROFILE
