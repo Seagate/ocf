@@ -240,15 +240,27 @@ static int __init_eviction_policy(ocf_cache_t cache) {
 	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++) {
 		ret = ocf_eviction_init_part(cache, &cache->user_parts[part_id].part);
 		if (ret)
-			return ret;
+			goto err;
 	}
 
 	ret = ocf_eviction_init_part(cache, &cache->free);
 	if(ret)
-		return ret;
+		goto err;
 
 	ret = ocf_eviction_init_part(cache, &cache->free_detached);
-	return ret;
+	if(ret)
+		goto err;
+
+	return 0;
+err:
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++) {
+        ocf_eviction_deinit_part(cache, &cache->user_parts[part_id].part);
+    }
+
+    ocf_eviction_deinit_part(cache, &cache->free);
+    ocf_eviction_deinit_part(cache, &cache->free_detached);
+
+    return ret;
 }
 
 // static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
