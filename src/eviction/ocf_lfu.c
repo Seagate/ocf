@@ -1189,15 +1189,10 @@ static inline ocf_cache_line_t lfu_req_next_cline(struct ocf_request *req,
 
     meta = ocf_metadata_get_lfu(cache, cline);
 
-	if (!metadata_test_dirty(cache, cline) || !meta->clean)
+	if (metadata_test_dirty(cache, cline) || !meta->clean)
 		goto line_unlock_wr; // Skip if cache line is dirty
 
-	if (!_lfu_trylock_hash(iter, t_core_id, t_core_line))
-		goto line_unlock_wr; // Skip if you can't take hash bucket lock
-
     *src_part_id = tmp_part_id;
-    *core_id = t_core_id;
-	*core_line = t_core_line;
 	part = &cache->user_parts[*src_part_id].part;
 
     // TODO: How to make this more efficient?
@@ -1207,6 +1202,12 @@ static inline ocf_cache_line_t lfu_req_next_cline(struct ocf_request *req,
                 goto line_unlock_wr; // Check if it's LFU in that shard
         }
     }
+
+	if (!_lfu_trylock_hash(iter, t_core_id, t_core_line))
+		goto line_unlock_wr; // Skip if you can't take hash bucket lock
+
+    *core_id = t_core_id;
+	*core_line = t_core_line;
 
 	if (dst_part->id != *src_part_id) {
 		ocf_lfu_repart_locked(cache, cline, part, dst_part);
@@ -1351,10 +1352,10 @@ got_cline:
         ENV_BUG_ON(req->map[req_idx].status != LOOKUP_MISS);
 
         // If coming from a user partition (not freelist), perform eviction
-        if (src_part->id != PARTITION_FREELIST)
+        if (actual_src_part_id != PARTITION_FREELIST)
         {
             // Invalidate the cache line: remove metadata and old mapping
-            ocf_lfu_invalidate(cache, cline, core_id, src_part->id);
+            ocf_lfu_invalidate(cache, cline, core_id, actual_src_part_id);
 
             // Release the hash bucket lock if we acquired it in the iterator
             _lfu_unlock_hash(&iter, core_id, core_line);
