@@ -60,7 +60,7 @@ __wrap_ocf_metadata_get_lru(ocf_cache_t cache, ocf_cache_line_t line)
 	return &meta[line];
 }
 
-static const unsigned end_marker = -1;
+static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
 
 static void _lru_init_test01(void **state)
 {
