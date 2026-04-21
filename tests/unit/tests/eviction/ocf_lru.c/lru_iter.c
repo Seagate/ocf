@@ -15,6 +15,8 @@
  *  _lru_lru_is_empty
  *  _lru_lru_set_empty
  *  _lru_lru_all_empty
+ * lru_iter_advance
+ * _lru_iter_advance_list
  *  ocf_rotate_right
  *  ocf_get_lru
  *  lru_iter_eviction_next
@@ -46,6 +48,8 @@
 
 // #define DEBUG
 
+static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
+
 struct ocf_cache_line_concurrency *__wrap_ocf_cache_line_concurrency(ocf_cache_t cache)
 {
 	return NULL;
@@ -61,14 +65,14 @@ void write_test_case_description(void)
 
 	// case 0 - all lists empty
 	for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
-		test_cases[0][i][test_case] = -1;
+		test_cases[0][i][test_case] = end_marker;
 	}
 
 	// case 1 - all lists with single element
 	test_case++;
 	for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
 		test_cases[0][i][test_case] = 10 * i;
-		test_cases[1][i][test_case] = -1;
+		test_cases[1][i][test_case] = end_marker;
 	}
 
 	// case 2 - all lists have between 1 and 5 elements, increasingly
@@ -78,7 +82,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 10 * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 3 - all lists have between 1 and 5 elements, modulo index
@@ -88,7 +92,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 10 * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 4 - all lists have between 0 and 4 elements, increasingly
@@ -98,7 +102,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 10 * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 5 - all lists have between 0 and 4 elements, modulo index
@@ -108,7 +112,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 10 * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 6 - list length increasing by 1 from 0
@@ -118,7 +122,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = OCF_NUM_LRU_LISTS * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 7 - list length increasing by 1 from 1
@@ -128,7 +132,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 2 * OCF_NUM_LRU_LISTS * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 8 - list length increasing by 4 from 0
@@ -138,7 +142,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 4 * OCF_NUM_LRU_LISTS * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// case 9 - list length increasing by 4 from 1
@@ -148,7 +152,7 @@ void write_test_case_description(void)
 
 		for (j = 0; j < num_elements; j++)
 			test_cases[j][i][test_case] = 5 * OCF_NUM_LRU_LISTS * i + j;
-		test_cases[j][i][test_case] = -1;
+		test_cases[j][i][test_case] = end_marker;
 	}
 
 	// cases 10-19: cases 0-9 rotated right by 4
@@ -160,24 +164,24 @@ void write_test_case_description(void)
 		for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
 			unsigned curr_list = (i + 4) % OCF_NUM_LRU_LISTS;
 			j = 0;
-			while(test_cases[j][i][matching_case] != -1) {
+			while(test_cases[j][i][matching_case] != end_marker) {
 				test_cases[j][curr_list][test_case] =
 						test_cases[j][i][matching_case];
 				j++;
 			}
-			test_cases[j][curr_list][test_case] = -1;
+			test_cases[j][curr_list][test_case] = end_marker;
 		}
 		test_case++;
 	}
 
 	/* transform cacheline numbers so that they remain unique but have
-	 * assignment to list modulo OCF_NUM_LRU_LISTS */
+	 * assignment to list according to stripe size */
 	for (test_case = 0; test_case < num_cases; test_case++) {
 		for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
 			j = 0;
-			while (test_cases[j][i][test_case] != -1) {
-				test_cases[j][i][test_case] = test_cases[j][i][test_case] *
-						OCF_NUM_LRU_LISTS + i;
+			while (test_cases[j][i][test_case] != end_marker) {
+				test_cases[j][i][test_case] = i * OCF_LRU_CHUNK_SIZE +
+					j + test_case * OCF_LRU_STRIPE_SIZE;
 				j++;
 			}
 		}
@@ -195,7 +199,7 @@ void write_test_case_description(void)
 		for (i = 0; i < OCF_NUM_LRU_LISTS; i++) {
 			print_message("list %02u: ", i);
 			j = 0;
-			while (test_cases[j][i][test_case] != -1) {
+			while (test_cases[j][i][test_case] != end_marker) {
 				print_message("%u ", test_cases[j][i][test_case]);
 				j++;
 			}
@@ -215,12 +219,12 @@ struct ocf_lru_list *__wrap_ocf_lru_get_list(struct ocf_user_part *user_part,
 {
 	unsigned i = 0;
 
-	while (test_cases[i][lru][current_case] != -1)
+	while (test_cases[i][lru][current_case] != end_marker)
 		i++;
 
 	if (i == 0) {
-		list.head = -1;
-		list.tail = -1;
+		list.head = end_marker;
+		list.tail = end_marker;
 		list.num_nodes = 0;
 	} else {
 		list.head = test_cases[0][lru][current_case];
@@ -239,7 +243,7 @@ struct ocf_lru_list *__wrap_ocf_lru_get_list(struct ocf_user_part *user_part,
 inline struct ocf_lru_list *__wrap_lru_get_cline_list(ocf_cache_t cache,
 		ocf_cache_line_t cline)
 {
-	return __wrap_ocf_lru_get_list(NULL, cline % OCF_NUM_LRU_LISTS, true);
+	return __wrap_ocf_lru_get_list(NULL, OCF_LRU_GET_LIST_INDEX(cline), true);
 }
 
 
@@ -254,10 +258,10 @@ struct ocf_lru_meta *__wrap_ocf_metadata_get_lru(
 	{
 		j = 0;
 
-		while (test_cases[j][i][current_case] != -1) {
+		while (test_cases[j][i][current_case] != end_marker) {
 			if (test_cases[j][i][current_case] == line) {
 				if (j == 0) {
-					g_lru_meta.prev = -1;
+					g_lru_meta.prev = end_marker;
 				} else {
 					g_lru_meta.prev =
 						test_cases[j - 1][i][current_case];
@@ -287,13 +291,13 @@ void __wrap_add_lru_head(ocf_cache_t cache,
 		unsigned int collision_index)
 {
 	unsigned list_head = list->head;
-	unsigned i, j = collision_index % OCF_NUM_LRU_LISTS;
+	unsigned i, j = OCF_LRU_GET_LIST_INDEX(collision_index);
 
 	i = 1;
-	while (test_cases[i][j][current_case] != -1)
+	while (test_cases[i][j][current_case] != end_marker)
 		i++;
 
-	test_cases[i+1][j][current_case] = -1;
+	test_cases[i+1][j][current_case] = end_marker;
 
 	while (i--)
 		test_cases[i + 1][j][current_case] = test_cases[i][j][current_case];
@@ -318,7 +322,7 @@ void __wrap_remove_lru_list(ocf_cache_t cache,
 	{
 		j = 0;
 
-		while (test_cases[j][i][current_case] != -1) {
+		while (test_cases[j][i][current_case] != end_marker) {
 			if (!found && test_cases[j][i][current_case] == collision_index) {
 				assert_int_equal(test_cases[0][i][current_case], list->head);
 				found = true;
@@ -366,47 +370,66 @@ static void _lru_run_test(unsigned test_case)
 	{
 		struct ocf_lru_iter iter;
 		ocf_cache_line_t cache_line, expected_cache_line;
-		unsigned curr_lru = start_pos;
+		unsigned curr_lru = (start_pos + OCF_NUM_LRU_LISTS - 1) % OCF_NUM_LRU_LISTS;
 		unsigned pos[OCF_NUM_LRU_LISTS];
 		unsigned i;
+		uint32_t mask, lru_element_idx;
 
 		write_test_case_description();
 
 		for (i = 0; i < OCF_NUM_LRU_LISTS; i++)
 		{
 			pos[i] = -1;
-			while(test_cases[pos[i] + 1][i][test_case] != -1)
+			while(test_cases[pos[i] + 1][i][test_case] != end_marker)
 				pos[i]++;
 		}
+
+		/* Initialize availability mask for round robin iterator */
+		mask = (1ULL << OCF_NUM_LRU_LISTS) - 1;
+		lru_element_idx = 0;
 
 		lru_iter_cleaning_init(&iter, NULL, NULL, start_pos);
 
 		do {
-			/* check what is expected to be returned from iterator */
-			if (pos[curr_lru] == -1) {
-				i = 1;
-				while (i < OCF_NUM_LRU_LISTS &&
-					pos[(curr_lru + i) % OCF_NUM_LRU_LISTS]
-						== -1) {
-					i++;
+			print_message("curr_lru (before): %u\n", curr_lru);
+
+			expected_cache_line = end_marker;
+
+			/* Check what is expected to be returned from iterator, round-robin style */
+            do {
+				lru_element_idx++;
+
+                /* pick next available LRU using ffs */
+				if(lru_element_idx >= 256 || !(mask & (1ULL << (OCF_NUM_LRU_LISTS - 1)))) {
+					unsigned inc = __builtin_ffsll(mask);
+					curr_lru = (curr_lru + inc) % OCF_NUM_LRU_LISTS;
+
+					/* rotate mask like OCF iterator */
+					mask = ocf_rotate_right(mask, inc, OCF_NUM_LRU_LISTS);
+
+					lru_element_idx = 0;
 				}
-				if (i == OCF_NUM_LRU_LISTS) {
-					/* reached end of lists */
-					expected_cache_line = -1;
-				} else {
-					curr_lru = (curr_lru + i) % OCF_NUM_LRU_LISTS;
-					expected_cache_line = test_cases[pos[curr_lru]]
-							[curr_lru][test_case];
-					pos[curr_lru]--;
-				}
-			} else {
-				expected_cache_line = test_cases[pos[curr_lru]]
-						[curr_lru][test_case];
-				pos[curr_lru]--;
-			}
+
+				print_message("curr_lru (after): %u\n", curr_lru);
+                
+                if (pos[curr_lru] != -1) {
+                    /* take element from this LRU */
+                    expected_cache_line =
+                        test_cases[pos[curr_lru]][curr_lru][test_case];
+                    pos[curr_lru]--;
+                    break;
+                } else {
+                    /* mark this LRU as empty */
+                    mask &= ~(1ULL << (OCF_NUM_LRU_LISTS - 1));
+                }
+            } while (expected_cache_line == end_marker && mask != 0);
+
+			print_message("expected: 0x%x\n", expected_cache_line);
 
 			/* get cacheline from iterator */
+			print_message("iter->lru_idx (before): %u\n", iter.lru_idx);
 			cache_line = lru_iter_cleaning_next(&iter);
+			print_message("iter->lru_idx (after): %u\n", iter.lru_idx);
 
 #ifdef DEBUG
 			if (cache_line == expected_cache_line) {
@@ -419,8 +442,7 @@ static void _lru_run_test(unsigned test_case)
 #endif
 			assert_int_equal(cache_line, expected_cache_line);
 
-			curr_lru = (curr_lru + 1) % OCF_NUM_LRU_LISTS;
-		} while (cache_line != -1);
+		} while (cache_line != end_marker);
 
 		/* make sure all cachelines are visited */
 		for (i = 0; i < OCF_NUM_LRU_LISTS; i++)
