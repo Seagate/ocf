@@ -96,8 +96,9 @@ static ocf_cache_line_t ocf_metadata_get_entries(
 	{
 	case metadata_segment_collision:
 	case metadata_segment_cleaning:
-	case metadata_segment_lru:
-	case metadata_segment_lfu:
+	case metadata_segment_eviction:
+	// case metadata_segment_lru:
+	// case metadata_segment_lfu:
 	case metadata_segment_list_info:
 		return cache_lines;
 
@@ -141,6 +142,26 @@ static ocf_cache_line_t ocf_metadata_get_entries(
 /*
  * Get size of particular hash metadata type element
  */
+
+// For eviction
+static int64_t ocf_metadata_get_eviction_size(ocf_cache_t cache, enum ocf_metadata_segment_id type, ocf_cache_line_size_t line_size) 
+{
+	ENV_BUG_ON(type <= metadata_segment_variable_size_start); // Type is definitely part of the variable size metadata
+
+	switch (cache->conf_meta->eviction_policy_type)
+	{
+		case ocf_eviction_lru:
+			return sizeof(struct ocf_lru_meta);
+		case ocf_eviction_lfu:
+			return sizeof(struct ocf_lfu_meta);
+		default:
+			ENV_BUG();
+	}
+
+	return 0;
+}
+
+// General
 static int64_t ocf_metadata_get_element_size(
 	enum ocf_metadata_segment_id type,
 	ocf_cache_line_size_t line_size)
@@ -151,13 +172,13 @@ static int64_t ocf_metadata_get_element_size(
 
 	switch (type)
 	{
-	case metadata_segment_lru:
-		size = sizeof(struct ocf_lru_meta);
-		break;
+	// case metadata_segment_lru:
+	// 	size = sizeof(struct ocf_lru_meta);
+	// 	break;
 
-	case metadata_segment_lfu:
-		size = sizeof(struct ocf_lfu_meta);
-		break;
+	// case metadata_segment_lfu:
+	// 	size = sizeof(struct ocf_lfu_meta);
+	// 	break;
 
 	case metadata_segment_cleaning:
 		size = sizeof(struct cleaning_policy_meta);
@@ -235,8 +256,9 @@ static bool ocf_metadata_is_flapped(
 	case metadata_segment_part_runtime:
 	case metadata_segment_core_runtime:
 	case metadata_segment_cleaning:
-	case metadata_segment_lru:
-	case metadata_segment_lfu:
+	case metadata_segment_eviction:
+	// case metadata_segment_lru:
+	// case metadata_segment_lfu:
 	case metadata_segment_collision:
 	case metadata_segment_list_info:
 	case metadata_segment_hash:
@@ -395,8 +417,9 @@ const char *const ocf_metadata_segment_names[] = {
 	[metadata_segment_part_config] = "Part config",
 	[metadata_segment_part_runtime] = "Part runtime",
 	[metadata_segment_cleaning] = "Cleaning",
-	[metadata_segment_lru] = "LRU list",
-	[metadata_segment_lfu] = "LFU list",
+	[metadata_segment_eviction] = "Eviction",
+	// [metadata_segment_lru] = "LRU list",
+	// [metadata_segment_lfu] = "LFU list",
 	[metadata_segment_collision] = "Collision",
 	[metadata_segment_list_info] = "List info",
 	[metadata_segment_hash] = "Hash",
@@ -519,6 +542,9 @@ static void ocf_metadata_deinit_fixed_size(struct ocf_cache *cache)
 	}
 	cache->free.runtime = NULL;
 	cache->free.eviction_runtime = NULL;
+
+	cache->free_detached.runtime = NULL;
+	cache->free_detached.eviction_runtime = NULL;
 
 	for (i = 0; i < metadata_segment_fixed_size_max; i++)
 	{
@@ -697,27 +723,27 @@ static void ocf_metadata_flush_unlock_collision_page(
 									   page);
 }
 
-static inline bool ocf_metadata_is_eviction_segment(
-	enum ocf_metadata_segment_id type)
-{
-	return type == metadata_segment_lru ||
-		   type == metadata_segment_lfu;
-}
+// static inline bool ocf_metadata_is_eviction_segment(
+// 	enum ocf_metadata_segment_id type)
+// {
+// 	return type == metadata_segment_lru ||
+// 		   type == metadata_segment_lfu;
+// }
 
-static inline bool ocf_metadata_is_active_eviction_segment(
-	ocf_cache_t cache, enum ocf_metadata_segment_id type)
-{
-	switch (cache->conf_meta->eviction_policy_type)
-	{
-	case ocf_eviction_lru:
-		return type == metadata_segment_lru;
-	case ocf_eviction_lfu:
-		return type == metadata_segment_lfu;
-	default:
-		ENV_BUG();
-		return false;
-	}
-}
+// static inline bool ocf_metadata_is_active_eviction_segment(
+// 	ocf_cache_t cache, enum ocf_metadata_segment_id type)
+// {
+// 	switch (cache->conf_meta->eviction_policy_type)
+// 	{
+// 	case ocf_eviction_lru:
+// 		return type == metadata_segment_lru;
+// 	case ocf_eviction_lfu:
+// 		return type == metadata_segment_lfu;
+// 	default:
+// 		ENV_BUG();
+// 		return false;
+// 	}
+// }
 
 /*
  * Initialize hash metadata interface
@@ -785,15 +811,19 @@ int ocf_metadata_init_variable_size(struct ocf_cache *cache,
 		}
 
 		/* Disable the unused eviction segment */
-		if (ocf_metadata_is_eviction_segment(i) &&
-			!ocf_metadata_is_active_eviction_segment(cache, i))
-		{
-			raw->disabled = true;
-			continue;
-		}
+		// if (ocf_metadata_is_eviction_segment(i) &&
+		// 	!ocf_metadata_is_active_eviction_segment(cache, i))
+		// {
+		// 	raw->disabled = true;
+		// 	continue;
+		// }
 
 		/* Entry size configuration */
-		raw->entry_size = ocf_metadata_get_element_size(i, line_size);
+		if(i == metadata_segment_eviction) {
+			raw->entry_size = ocf_metadata_get_eviction_size(cache, i, line_size);
+		} else {
+			raw->entry_size = ocf_metadata_get_element_size(i, line_size);
+		}
 		raw->entries_in_page = PAGE_SIZE / raw->entry_size;
 
 		/* Setup flapping support */
@@ -1171,6 +1201,7 @@ struct ocf_pipeline_arg ocf_metadata_flush_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_sb_runtime),
 	OCF_PL_ARG_INT(metadata_segment_part_runtime),
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
+	OCF_PL_ARG_INT(metadata_segment_eviction),
 	// OCF_PL_ARG_INT(metadata_segment_lru),
 	// OCF_PL_ARG_INT(metadata_segment_lfu),
 	OCF_PL_ARG_INT(metadata_segment_collision),
@@ -1193,26 +1224,26 @@ static bool ocf_check_if_cleaner_enabled(ocf_pipeline_t pipeline,
 /*
  * Predicate function to check if eviction = LRU
  */
-static bool ocf_check_if_lru_enabled(ocf_pipeline_t pipeline,
-									 void *priv, ocf_pipeline_arg_t arg)
-{
-	struct ocf_metadata_context *context = priv;
+// static bool ocf_check_if_lru_enabled(ocf_pipeline_t pipeline,
+// 									 void *priv, ocf_pipeline_arg_t arg)
+// {
+// 	struct ocf_metadata_context *context = priv;
 
-	return context->cache->conf_meta->eviction_policy_type ==
-		   ocf_eviction_lru;
-}
+// 	return context->cache->conf_meta->eviction_policy_type ==
+// 		   ocf_eviction_lru;
+// }
 
-/*
- * Predicate function to check if eviction = LFU
- */
-static bool ocf_check_if_lfu_enabled(ocf_pipeline_t pipeline,
-									 void *priv, ocf_pipeline_arg_t arg)
-{
-	struct ocf_metadata_context *context = priv;
+// /*
+//  * Predicate function to check if eviction = LFU
+//  */
+// static bool ocf_check_if_lfu_enabled(ocf_pipeline_t pipeline,
+// 									 void *priv, ocf_pipeline_arg_t arg)
+// {
+// 	struct ocf_metadata_context *context = priv;
 
-	return context->cache->conf_meta->eviction_policy_type ==
-		   ocf_eviction_lfu;
-}
+// 	return context->cache->conf_meta->eviction_policy_type ==
+// 		   ocf_eviction_lfu;
+// }
 
 struct ocf_pipeline_properties ocf_metadata_flush_all_pipeline_props = {
 	.priv_size = sizeof(struct ocf_metadata_context),
@@ -1222,24 +1253,24 @@ struct ocf_pipeline_properties ocf_metadata_flush_all_pipeline_props = {
 		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_cleaner_enabled,
 								 ocf_metadata_flush_segment,
 								 metadata_segment_cleaning),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
-								 ocf_metadata_flush_segment,
-								 metadata_segment_lru),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
-								 ocf_metadata_flush_segment,
-								 metadata_segment_lfu),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
+		// 						 ocf_metadata_flush_segment,
+		// 						 metadata_segment_lru),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
+		// 						 ocf_metadata_flush_segment,
+		// 						 metadata_segment_lfu),
 		OCF_PL_STEP_FOREACH(ocf_metadata_flush_segment,
 							ocf_metadata_flush_all_args),
 
 		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_cleaner_enabled,
 								 ocf_metadata_calculate_crc,
 								 metadata_segment_cleaning),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
-								 ocf_metadata_calculate_crc,
-								 metadata_segment_lru),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
-								 ocf_metadata_calculate_crc,
-								 metadata_segment_lfu),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
+		// 						 ocf_metadata_calculate_crc,
+		// 						 metadata_segment_lru),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
+		// 						 ocf_metadata_calculate_crc,
+		// 						 metadata_segment_lfu),
 		OCF_PL_STEP_FOREACH(ocf_metadata_calculate_crc,
 							ocf_metadata_flush_all_args),
 		OCF_PL_STEP_ARG_INT(ocf_metadata_flush_all_set_status,
@@ -1376,6 +1407,7 @@ out:
 
 struct ocf_pipeline_arg ocf_metadata_load_all_args[] = {
 	OCF_PL_ARG_INT(metadata_segment_core_runtime),
+	OCF_PL_ARG_INT(metadata_segment_eviction),
 	// OCF_PL_ARG_INT(metadata_segment_lru),
 	// OCF_PL_ARG_INT(metadata_segment_lfu),
 	OCF_PL_ARG_INT(metadata_segment_collision),
@@ -1391,24 +1423,24 @@ struct ocf_pipeline_properties ocf_metadata_load_all_pipeline_props = {
 		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_cleaner_enabled,
 								 ocf_metadata_load_segment,
 								 metadata_segment_cleaning),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
-								 ocf_metadata_load_segment,
-								 metadata_segment_lru),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
-								 ocf_metadata_load_segment,
-								 metadata_segment_lfu),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
+		// 						 ocf_metadata_load_segment,
+		// 						 metadata_segment_lru),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
+		// 						 ocf_metadata_load_segment,
+		// 						 metadata_segment_lfu),
 		OCF_PL_STEP_FOREACH(ocf_metadata_load_segment,
 							ocf_metadata_load_all_args),
 
 		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_cleaner_enabled,
 								 ocf_metadata_check_crc,
 								 metadata_segment_cleaning),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
-								 ocf_metadata_check_crc,
-								 metadata_segment_lru),
-		OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
-								 ocf_metadata_check_crc,
-								 metadata_segment_lfu),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lru_enabled,
+		// 						 ocf_metadata_check_crc,
+		// 						 metadata_segment_lru),
+		// OCF_PL_STEP_COND_ARG_INT(ocf_check_if_lfu_enabled,
+		// 						 ocf_metadata_check_crc,
+		// 						 metadata_segment_lfu),
 		OCF_PL_STEP_FOREACH(ocf_metadata_check_crc,
 							ocf_metadata_load_all_args),
 		OCF_PL_STEP_TERMINATOR(),

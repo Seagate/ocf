@@ -23,7 +23,7 @@ ocf_part_id_t ocf_metadata_get_partition_id(struct ocf_cache *cache,
 			const struct ocf_lru_meta *info;
 
 			info = (const struct ocf_lru_meta *)ocf_metadata_raw_rd_access(cache,
-											&(ctrl->raw_desc[metadata_segment_lru]), line);
+											&(ctrl->raw_desc[metadata_segment_eviction]), line);
 
 			ENV_BUG_ON(!info);
 
@@ -35,7 +35,7 @@ ocf_part_id_t ocf_metadata_get_partition_id(struct ocf_cache *cache,
 			const struct ocf_lfu_meta *info;
 
 			info = (const struct ocf_lfu_meta *)ocf_metadata_raw_rd_access(cache,
-											&(ctrl->raw_desc[metadata_segment_lfu]), line);
+											&(ctrl->raw_desc[metadata_segment_eviction]), line);
 
 			ENV_BUG_ON(!info);
 
@@ -65,7 +65,7 @@ void ocf_metadata_set_partition_id(struct ocf_cache *cache,
 			struct ocf_lru_meta *info;
 
 			info = (struct ocf_lru_meta *)ocf_metadata_raw_wr_access(cache,
-											&(ctrl->raw_desc[metadata_segment_lru]), line);
+											&(ctrl->raw_desc[metadata_segment_eviction]), line);
 
 			if (info)
 				info->partition_id = part_id;
@@ -78,7 +78,7 @@ void ocf_metadata_set_partition_id(struct ocf_cache *cache,
 			struct ocf_lfu_meta *info;
 
 			info = (struct ocf_lfu_meta *)ocf_metadata_raw_rd_access(cache,
-											&(ctrl->raw_desc[metadata_segment_lfu]), line);
+											&(ctrl->raw_desc[metadata_segment_eviction]), line);
 
 			if (info)
 				info->partition_id = part_id;
