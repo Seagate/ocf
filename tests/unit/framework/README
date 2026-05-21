@@ -10,7 +10,7 @@ GENERATING NEW TEST
 	Afterwards, add the folder into tests/unit/framework/tests_config.py DIRECTORIES_WITH_TESTS_LIST
 
 BUILDING TESTS
-	Run tests/unit/framework/run_unit_tests.py, then tests/unit/framework/prepare_sources_for_testing.py and then tests/unit/framework/run_unit_tests.py again.
+	Run tests/unit/framework/run_unit_tests.py.
 
 	Logs of build and run are stored under tests/unit/framework/logs for debugging
 
