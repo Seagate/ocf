@@ -1036,33 +1036,6 @@ void ocf_lfu_reattach(ocf_cache_t cache, ocf_cache_line_t cline)
     ocf_lfu_repart(cache, cline, &cache->free_detached, &cache->free);
 }
 
-/** Functionality copied over from LRU */
-// static bool _is_cache_line_acting(struct ocf_cache *cache,
-//                                   uint32_t cache_line, ocf_core_id_t core_id,
-//                                   uint64_t start_line, uint64_t end_line)
-// {
-//     ocf_core_id_t tmp_core_id;
-//     uint64_t core_line;
-
-//     ocf_metadata_get_core_info(cache, cache_line,
-//                                &tmp_core_id, &core_line);
-
-//     if (core_id != OCF_CORE_ID_INVALID)
-//     {
-//         if (core_id != tmp_core_id)
-//             return false;
-
-//         if (core_line < start_line || core_line > end_line)
-//             return false;
-//     }
-//     else if (tmp_core_id == OCF_CORE_ID_INVALID)
-//     {
-//         return false;
-//     }
-
-//     return true;
-// }
-
 // /*
 //  * Iterates over cache lines that belong to the core device with
 //  * core ID = core_id  whose core byte addresses are in the range
