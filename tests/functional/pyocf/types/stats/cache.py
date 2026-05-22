@@ -1,6 +1,7 @@
 #
 # Copyright(c) 2019-2021 Intel Corporation
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -32,6 +33,7 @@ class CacheInfo(Structure):
         ("cleaning_policy", c_uint32),
         ("promotion_policy", c_uint32),
         ("prefetch_mask", c_uint8),
+        ("eviction_policy", c_uint32),
         ("cache_line_size", c_uint64),
         ("flushed", c_uint32),
         ("core_count", c_uint32),

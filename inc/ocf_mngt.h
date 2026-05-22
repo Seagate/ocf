@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2024-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -265,6 +266,11 @@ struct ocf_mngt_cache_config {
 	ocf_promotion_t promotion_policy;
 
 	/**
+	 * @brief Eviction policy type
+	 */
+	ocf_eviction_t eviction_policy;
+
+	/**
 	 * @brief Cache line size
 	 */
 	ocf_cache_line_size_t cache_line_size;
@@ -311,6 +317,7 @@ static inline void ocf_mngt_cache_config_set_default(
 {
 	cfg->cache_mode = ocf_cache_mode_default;
 	cfg->promotion_policy = ocf_promotion_default;
+	cfg->eviction_policy = ocf_eviction_default;
 	cfg->cache_line_size = ocf_cache_line_size_4;
 	cfg->metadata_volatile = false;
 	cfg->backfill.max_queue_size = 65536;
@@ -824,6 +831,31 @@ void ocf_mngt_cache_purge(ocf_cache_t cache,
 		ocf_mngt_cache_purge_end_t cmpl, void *priv);
 
 /**
+ * @brief Completion callback of cache drain operation
+ *
+ * @param[in] cache Cache handle
+ * @param[in] priv Callback context
+ * @param[in] error Error code (zero on success)
+ */
+typedef void (*ocf_mngt_cache_drain_end_t)(ocf_cache_t cache,
+		void *priv, int error);
+
+/**
+ * @brief Wait for all in-flight cache requests to finish.
+ *
+ * On completion no cache request that touched the cache before this
+ * call returned will still be in flight. Useful for callers that need
+ * to ensure no new cache lines can be inserted before they perform a
+ * subsequent invalidation.
+ *
+ * @param[in] cache Cache handle
+ * @param[in] cmpl Completion callback
+ * @param[in] priv Completion callback context
+ */
+void ocf_mngt_cache_drain(ocf_cache_t cache,
+		ocf_mngt_cache_drain_end_t cmpl, void *priv);
+
+/**
  * @brief Completion callback of core purge operation
  *
  * @param[in] core Core handle
@@ -1073,6 +1105,29 @@ int ocf_mngt_cache_prefetch_set_param(ocf_cache_t cache, ocf_pf_id_t pf_id,
  */
 int ocf_mngt_cache_prefetch_get_param(ocf_cache_t cache, ocf_pf_id_t pf_id,
 		uint32_t param_id, uint32_t *param_value);
+
+		
+/**
+ * @brief Set eviction policy parameter for given cache
+ *
+ * @param[in] cache Cache handle
+ * @param[in] type Eviction policy type
+ *
+ * @retval 0 Parameter has been set successfully
+ * @retval Non-zero Error occurred and parameter has not been set
+ */
+int ocf_mngt_cache_eviction_set_policy(ocf_cache_t cache, ocf_eviction_t type);
+
+/**
+ * @brief Get eviction policy in given cache
+ *
+ * @param[in] cache Cache handle
+ * @param[out] type Policy type
+ *
+ * @retval 0 success
+ * @retval Non-zero Error occurred and policy type could not be retrieved
+ */
+int ocf_mngt_cache_eviction_get_policy(ocf_cache_t cache, ocf_eviction_t *type);
 
 /**
  * @brief IO class configuration

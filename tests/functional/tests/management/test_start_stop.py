@@ -2,6 +2,7 @@
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2024-2025 Huawei Technologies
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -29,6 +30,7 @@ from pyocf.types.cache import (
     CacheConfig,
     CacheDeviceConfig,
     CacheAttachConfig,
+    EvictionPolicy
 )
 from pyocf.types.core import Core
 from pyocf.types.ctx import OcfCtx
@@ -170,7 +172,8 @@ def test_start_read_first_and_check_mode(pyocf_ctx, mode: CacheMode, cls: CacheL
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", CacheMode)
 @pytest.mark.parametrize("layout", MetadataLayout)
-def test_start_params(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, layout: MetadataLayout):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_start_params(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, layout: MetadataLayout, eviction_policy: EvictionPolicy):
     """Starting cache with different parameters.
     Check if cache starts without errors.
     If possible check whether cache reports properly set parameters.
@@ -188,6 +191,7 @@ def test_start_params(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, layout: Me
         cache_device,
         cache_mode=mode,
         cache_line_size=cls,
+        eviction_policy=eviction_policy,
         name=name,
         metadata_volatile=volatile_metadata,
         max_queue_size=queue_size,
@@ -200,6 +204,7 @@ def test_start_params(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, layout: Me
     assert stats["conf"]["cache_mode"] == mode, "Cache mode"
     assert stats["conf"]["cache_line_size"] == cls, "Cache line size"
     assert cache.get_name() == name, "Cache name"
+    assert stats["conf"]["eviction_policy"] == eviction_policy, "Eviction policy"
     # TODO: metadata_volatile, max_queue_size,
     #  queue_unblock_size, pt_unaligned_io, use_submit_fast
     # TODO: test in functional tests
@@ -208,14 +213,15 @@ def test_start_params(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, layout: Me
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", CacheMode)
 @pytest.mark.parametrize("with_flush", {True, False})
-def test_stop(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, with_flush: bool):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_stop(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, with_flush: bool, eviction_policy: EvictionPolicy):
     """Stopping cache.
     Check if cache is stopped properly in different modes with or without preceding flush operation.
     """
 
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(5))
-    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
 
     cache.add_core(core)
@@ -260,17 +266,19 @@ def test_start_stop_multiple(pyocf_ctx):
         cache_device = RamVolume(Size.from_MiB(50))
         cache_name = f"cache{i}"
         cache_mode = CacheMode(randrange(0, len(CacheMode)))
+        eviction_policy = EvictionPolicy(randrange(0, len(EvictionPolicy)))
         size = 4096 * 2 ** randrange(0, len(CacheLineSize))
         cache_line_size = CacheLineSize(size)
 
         cache = Cache.start_on_device(
-            cache_device, name=cache_name, cache_mode=cache_mode, cache_line_size=cache_line_size,
+            cache_device, name=cache_name, cache_mode=cache_mode, cache_line_size=cache_line_size, eviction_policy=eviction_policy
         )
         caches.append(cache)
         stats = cache.get_stats()
         assert stats["conf"]["cache_mode"] == cache_mode, "Cache mode"
         assert stats["conf"]["cache_line_size"] == cache_line_size, "Cache line size"
         assert stats["conf"]["cache_name"] == cache_name, "Cache name"
+        assert stats ["conf"]["eviction_policy"] == eviction_policy, "Eviction policy"
 
     caches.sort(key=lambda e: randrange(1000))
     for cache in caches:
@@ -290,16 +298,18 @@ def test_100_start_stop(pyocf_ctx):
         cache_device = RamVolume(Size.from_MiB(50))
         cache_name = f"cache{i}"
         cache_mode = CacheMode(randrange(0, len(CacheMode)))
+        eviction_policy = EvictionPolicy(randrange(0, len(EvictionPolicy)))
         size = 4096 * 2 ** randrange(0, len(CacheLineSize))
         cache_line_size = CacheLineSize(size)
 
         cache = Cache.start_on_device(
-            cache_device, name=cache_name, cache_mode=cache_mode, cache_line_size=cache_line_size,
+            cache_device, name=cache_name, cache_mode=cache_mode, cache_line_size=cache_line_size, eviction_policy=eviction_policy
         )
         stats = cache.get_stats()
         assert stats["conf"]["cache_mode"] == cache_mode, "Cache mode"
         assert stats["conf"]["cache_line_size"] == cache_line_size, "Cache line size"
         assert stats["conf"]["cache_name"] == cache_name, "Cache name"
+        assert stats["conf"]["eviction_policy"] == eviction_policy, "Eviction policy"
         cache.stop()
         assert Cache.get_by_name("cache1", pyocf_ctx) != 0, "Try getting cache after stopping it"
 
@@ -323,6 +333,7 @@ def test_start_stop_incrementally(pyocf_ctx):
                 cache_device = RamVolume(Size.from_MiB(50))
                 cache_name = f"cache{next(counter)}"
                 cache_mode = CacheMode(randrange(0, len(CacheMode)))
+                eviction_policy = EvictionPolicy(randrange(0, len(EvictionPolicy)))
                 size = 4096 * 2 ** randrange(0, len(CacheLineSize))
                 cache_line_size = CacheLineSize(size)
 
@@ -331,12 +342,14 @@ def test_start_stop_incrementally(pyocf_ctx):
                     name=cache_name,
                     cache_mode=cache_mode,
                     cache_line_size=cache_line_size,
+                    eviction_policy=eviction_policy
                 )
                 caches.append(cache)
                 stats = cache.get_stats()
                 assert stats["conf"]["cache_mode"] == cache_mode, "Cache mode"
                 assert stats["conf"]["cache_line_size"] == cache_line_size, "Cache line size"
                 assert stats["conf"]["cache_name"] == cache_name, "Cache name"
+                assert stats["conf"]["eviction_policy"] == eviction_policy, "Eviction policy"
                 if len(caches) == caches_limit:
                     increase = False
         else:
@@ -357,7 +370,8 @@ def test_start_stop_incrementally(pyocf_ctx):
 
 @pytest.mark.parametrize("mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_start_cache_same_id(pyocf_ctx, mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_start_cache_same_id(pyocf_ctx, mode, cls, eviction_policy):
     """Adding two caches with the same name
     Check that OCF does not allow for 2 caches to be started with the same cache_name
     """
@@ -366,19 +380,20 @@ def test_start_cache_same_id(pyocf_ctx, mode, cls):
     cache_device2 = RamVolume(Size.from_MiB(50))
     cache_name = "cache"
     cache = Cache.start_on_device(
-        cache_device1, cache_mode=mode, cache_line_size=cls, name=cache_name
+        cache_device1, cache_mode=mode, cache_line_size=cls, name=cache_name, eviction_policy=eviction_policy
     )
     cache.get_stats()
 
     with pytest.raises(OcfError, match="OCF_ERR_CACHE_EXIST"):
         cache = Cache.start_on_device(
-            cache_device2, cache_mode=mode, cache_line_size=cls, name=cache_name
+            cache_device2, cache_mode=mode, cache_line_size=cls, name=cache_name, eviction_policy=eviction_policy
         )
     cache.get_stats()
 
 
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_start_cache_huge_device(pyocf_ctx_log_buffer, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_start_cache_huge_device(pyocf_ctx_log_buffer, cls, eviction_policy):
     """
     Test whether we can start cache which would overflow ocf_cache_line_t type.
     pass_criteria:
@@ -397,7 +412,7 @@ def test_start_cache_huge_device(pyocf_ctx_log_buffer, cls):
     cache_device = HugeDevice()
 
     with pytest.raises(OcfError, match="OCF_ERR_INVAL_CACHE_DEV"):
-        cache = Cache.start_on_device(cache_device, cache_line_size=cls, metadata_volatile=True)
+        cache = Cache.start_on_device(cache_device, cache_line_size=cls, metadata_volatile=True, eviction_policy=eviction_policy)
 
     assert any(
         [line.find("exceeds maximum") > 0 for line in pyocf_ctx_log_buffer.get_lines()]
@@ -406,7 +421,8 @@ def test_start_cache_huge_device(pyocf_ctx_log_buffer, cls):
 
 @pytest.mark.parametrize("mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_start_cache_same_device(pyocf_ctx, mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_start_cache_same_device(pyocf_ctx, mode, cls, eviction_policy):
     """Adding two caches using the same cache device
     Check that OCF does not allow for 2 caches using the same cache device to be started.
     Low level OCF API is used for attach instead of Cache::attach_device as the latter operates
@@ -444,7 +460,7 @@ def test_start_cache_same_device(pyocf_ctx, mode, cls):
     )
 
     # start first cache instance
-    cache1 = Cache(pyocf_ctx, cache_mode=mode, cache_line_size=cls, name="cache1")
+    cache1 = Cache(pyocf_ctx, cache_mode=mode, cache_line_size=cls, name="cache1", eviction_policy=eviction_policy)
     cache1.start_cache()
     cache1.write_lock()
     c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
@@ -455,7 +471,7 @@ def test_start_cache_same_device(pyocf_ctx, mode, cls):
 
     # attempt to start second cache instance on a volume with the same UUID
     attach_cfg._device._volume = vol2
-    cache2 = Cache(pyocf_ctx, cache_mode=mode, cache_line_size=cls, name="cache2")
+    cache2 = Cache(pyocf_ctx, cache_mode=mode, cache_line_size=cls, name="cache2", eviction_policy=eviction_policy)
     cache2.start_cache()
     cache2.write_lock()
     c = OcfCompletion([("cache", c_void_p), ("priv", c_void_p), ("error", c_int)])
@@ -478,7 +494,8 @@ def test_start_cache_same_device(pyocf_ctx, mode, cls):
 
 @pytest.mark.parametrize("mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_start_too_small_device(pyocf_ctx, mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_start_too_small_device(pyocf_ctx, mode, cls, eviction_policy):
     """Starting cache with device below 100MiB
     Check if starting cache with device below minimum size is blocked
     """
@@ -486,7 +503,7 @@ def test_start_too_small_device(pyocf_ctx, mode, cls):
     cache_device = RamVolume(Size.from_B(20 * 1024 * 1024 - 1))
 
     with pytest.raises(OcfError, match="OCF_ERR_INVAL_CACHE_DEV"):
-        Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls)
+        Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
 
 def test_start_stop_noqueue(pyocf_ctx):

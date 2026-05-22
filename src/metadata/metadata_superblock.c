@@ -2,6 +2,7 @@
  * Copyright(c) 2020-2022 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -188,6 +189,12 @@ int ocf_metadata_validate_superblock(ocf_ctx_t ctx,
 			superblock->promotion_policy_type >=
 					ocf_promotion_max) {
 		ocf_log_invalid_superblock("promotion policy");
+		return -OCF_ERR_INVAL;
+	}
+
+	if(superblock->eviction_policy_type < 0 || 
+		superblock->eviction_policy_type >= ocf_eviction_max) {
+		ocf_log_invalid_superblock("eviction policy");
 		return -OCF_ERR_INVAL;
 	}
 

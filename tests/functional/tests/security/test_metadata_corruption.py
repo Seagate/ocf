@@ -1,5 +1,6 @@
 #
 # Copyright(c) 2022 Intel Corporation
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -12,7 +13,7 @@ from enum import Enum
 
 from pyocf.types.volume import RamVolume
 from pyocf.types.volume_replicated import ReplicatedVolume
-from pyocf.types.cache import Cache, CacheMetadataSegment, CacheMode
+from pyocf.types.cache import Cache, CacheMetadataSegment, CacheMode, EvictionPolicy
 from pyocf.types.volume_cache import CacheVolume
 from pyocf.types.core import Core
 from pyocf.types.volume_core import CoreVolume
@@ -72,6 +73,7 @@ class Shutdown(Enum):
         (Shutdown.DIRTY, CacheMetadataSegment.CORE_UUID, raises(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.CLEANING, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.LRU, does_not_raise()),
+        (Shutdown.DIRTY, CacheMetadataSegment.LFU, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.COLLISION, may_raise(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.LIST_INFO, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.HASH, does_not_raise()),
@@ -85,6 +87,7 @@ class Shutdown(Enum):
         (Shutdown.CLEAN, CacheMetadataSegment.CORE_UUID, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.CLEANING, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.LRU, raises(OcfError)),
+        (Shutdown.CLEAN, CacheMetadataSegment.LFU, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.COLLISION, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.LIST_INFO, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.HASH, raises(OcfError)),
@@ -92,8 +95,9 @@ class Shutdown(Enum):
 )
 @pytest.mark.parametrize("cache_line_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
 def test_metadata_corruption(
-    pyocf_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation
+    pyocf_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation, eviction_policy
 ):
     cache_volume = RamVolume(Size.from_MiB(60))
 
@@ -103,6 +107,7 @@ def test_metadata_corruption(
         cache_volume,
         cache_mode=cache_mode,
         cache_line_size=cache_line_size,
+        eviction_policy=eviction_policy
     )
 
     corrupted_bytes = get_random_target_in_segment(cache, target_segment)
@@ -159,6 +164,7 @@ def test_metadata_corruption(
         (Shutdown.DIRTY, CacheMetadataSegment.CORE_UUID, raises(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.CLEANING, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.LRU, does_not_raise()),
+        (Shutdown.DIRTY, CacheMetadataSegment.LFU, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.COLLISION, may_raise(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.LIST_INFO, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.HASH, does_not_raise()),
@@ -179,8 +185,9 @@ def test_metadata_corruption(
 )
 @pytest.mark.parametrize("cache_line_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
 def test_metadata_corruption_standby_activate(
-    pyocf_2_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation
+    pyocf_2_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation, eviction_policy
 ):
     primary_ctx, secondary_ctx = pyocf_2_ctx
 
@@ -193,6 +200,7 @@ def test_metadata_corruption_standby_activate(
         owner=secondary_ctx,
         cache_mode=cache_mode,
         cache_line_size=cache_line_size,
+        eviction_policy=eviction_policy
     )
     secondary_cache.start_cache()
     secondary_cache.standby_attach(secondary_cache_volume)
@@ -209,6 +217,7 @@ def test_metadata_corruption_standby_activate(
         owner=primary_ctx,
         cache_mode=cache_mode,
         cache_line_size=cache_line_size,
+        eviction_policy=eviction_policy
     )
     core = Core(core_volume)
     primary_cache.add_core(core)
@@ -264,6 +273,7 @@ def test_metadata_corruption_standby_activate(
         (Shutdown.DIRTY, CacheMetadataSegment.CORE_UUID, raises(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.CLEANING, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.LRU, does_not_raise()),
+        (Shutdown.DIRTY, CacheMetadataSegment.LFU, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.COLLISION, may_raise(OcfError)),
         (Shutdown.DIRTY, CacheMetadataSegment.LIST_INFO, does_not_raise()),
         (Shutdown.DIRTY, CacheMetadataSegment.HASH, does_not_raise()),
@@ -277,6 +287,7 @@ def test_metadata_corruption_standby_activate(
         (Shutdown.CLEAN, CacheMetadataSegment.CORE_UUID, raises(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.CLEANING, does_not_raise()),
         (Shutdown.CLEAN, CacheMetadataSegment.LRU, does_not_raise()),
+        (Shutdown.CLEAN, CacheMetadataSegment.LFU, does_not_raise()),
         (Shutdown.CLEAN, CacheMetadataSegment.COLLISION, may_raise(OcfError)),
         (Shutdown.CLEAN, CacheMetadataSegment.LIST_INFO, does_not_raise()),
         (Shutdown.CLEAN, CacheMetadataSegment.HASH, does_not_raise()),
@@ -284,8 +295,9 @@ def test_metadata_corruption_standby_activate(
 )
 @pytest.mark.parametrize("cache_line_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
 def test_metadata_corruption_standby_load(
-    pyocf_2_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation
+    pyocf_2_ctx, cache_line_size, cache_mode, shutdown_type, target_segment, expectation, eviction_policy
 ):
     primary_ctx, secondary_ctx = pyocf_2_ctx
 
@@ -298,6 +310,7 @@ def test_metadata_corruption_standby_load(
         owner=secondary_ctx,
         cache_mode=cache_mode,
         cache_line_size=cache_line_size,
+        eviction_policy=eviction_policy
     )
     secondary_cache.start_cache()
     secondary_cache.standby_attach(secondary_cache_volume)
@@ -314,6 +327,7 @@ def test_metadata_corruption_standby_load(
         owner=primary_ctx,
         cache_mode=cache_mode,
         cache_line_size=cache_line_size,
+        eviction_policy=eviction_policy
     )
     core = Core(core_volume)
     primary_cache.add_core(core)

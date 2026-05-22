@@ -2,6 +2,7 @@
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2024 Huawei Technologies
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -62,6 +63,7 @@ class CacheMetadataSegment(IntEnum):
     CORE_UUID = auto()
     CLEANING = auto()
     LRU = auto()
+    LFU = auto()
     COLLISION = auto()
     LIST_INFO = auto()
     HASH = auto()
@@ -78,7 +80,8 @@ class CacheMetadataSegment(IntEnum):
             "Core runtime": cls.CORE_RUNTIME,
             "Core UUID": cls.CORE_UUID,
             "Cleaning": cls.CLEANING,
-            "LRU": cls.LRU,
+            "LRU List": cls.LRU,
+            "LFU List": cls.LFU,
             "Collision": cls.COLLISION,
             "List info": cls.LIST_INFO,
             "Hash": cls.HASH,
@@ -98,6 +101,7 @@ class CacheConfig(Structure):
         ("_name", c_char * MAX_CACHE_NAME_SIZE),
         ("_cache_mode", c_uint32),
         ("_promotion_policy", c_uint32),
+        ("_eviction_policy", c_uint32),
         ("_cache_line_size", c_uint64),
         ("_metadata_volatile", c_bool),
         ("_locked", c_bool),
@@ -253,6 +257,13 @@ class MetadataLayout(IntEnum):
     def __str__(self):
         return self.name
 
+class EvictionPolicy(IntEnum):
+    LRU = 0
+    LFU = 1
+    DEFAULT = LRU
+
+    def __str__(self):
+        return self.name
 
 class Cache:
     DEFAULT_BACKFILL_QUEUE_SIZE = 65536
@@ -266,6 +277,7 @@ class Cache:
         name: str = "cache",
         cache_mode: CacheMode = CacheMode.DEFAULT,
         promotion_policy: PromotionPolicy = PromotionPolicy.DEFAULT,
+        eviction_policy: EvictionPolicy = EvictionPolicy.DEFAULT,
         cache_line_size: CacheLineSize = CacheLineSize.DEFAULT,
         metadata_volatile: bool = False,
         max_queue_size: int = DEFAULT_BACKFILL_QUEUE_SIZE,
@@ -280,6 +292,7 @@ class Cache:
         self.name = name
         self.cache_mode = cache_mode
         self.promotion_policy = promotion_policy
+        self.eviction_policy = eviction_policy
         self.cache_line_size = cache_line_size
         self.metadata_volatile = metadata_volatile
         self.max_queue_size = max_queue_size
@@ -302,6 +315,7 @@ class Cache:
             _name=self.name.encode("ascii"),
             _cache_mode=self.cache_mode,
             _promotion_policy=self.promotion_policy,
+            _eviction_policy=self.eviction_policy,
             _cache_line_size=self.cache_line_size,
             _metadata_volatile=self.metadata_volatile,
             _backfill=Backfill(
@@ -1083,6 +1097,7 @@ class Cache:
             "cleaning_policy": CleaningPolicy(cache_info.cleaning_policy),
             "promotion_policy": PromotionPolicy(cache_info.promotion_policy),
             "prefetch": prefetch,
+            "eviction_policy": EvictionPolicy(cache_info.eviction_policy),
             "cache_line_size": line_size,
             "flushed": CacheLines(cache_info.flushed, line_size),
             "core_count": cache_info.core_count,

@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2023-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -13,6 +14,7 @@
 #include "cleaning/cleaning.h"
 #include "ocf_space.h"
 #include "ocf_env_refcnt.h"
+#include "eviction/ocf_eviction.h"
 
 #define OCF_NUM_PARTITIONS (OCF_USER_IO_CLASS_MAX + 3)
 
@@ -35,7 +37,6 @@ struct ocf_user_part_config {
 struct ocf_part_runtime {
 	env_atomic curr_size;
 	env_atomic evict_counter;
-	struct ocf_lru_part_meta lru[OCF_NUM_LRU_LISTS];
 };
 
 typedef bool ( *_lru_hash_locked_pfn)(struct ocf_request *req,
@@ -70,6 +71,34 @@ struct ocf_lru_iter
 	bool clean : 1;
 };
 
+/* LFU Iterator State */
+struct ocf_lfu_iter {
+	/* Cache object */
+	ocf_cache_t cache;
+
+	/* Cacheline concurrency control (locking) */
+	struct ocf_alock *c;
+
+	/* Target (source) partition we're evicting from */
+	struct ocf_part *part;
+
+	/* Optional request context */
+	struct ocf_request *req;
+
+	/* Index for shard */
+	uint32_t current_shard;
+
+	uint32_t current_freq;
+
+	ocf_cache_line_t last_cline;
+
+	/* If true, iterate only clean cachelines */
+	bool clean : 1;
+
+	/* Callback to check if hash bucket is already locked */
+	_lru_hash_locked_pfn hash_locked;
+};
+
 #define OCF_EVICTION_CLEAN_SIZE 32U
 
 struct ocf_part_cleaning_ctx {
@@ -83,7 +112,8 @@ struct ocf_part_cleaning_ctx {
  * well as freelist
  */
 struct ocf_part {
-	struct ocf_part_runtime *runtime;
+	struct ocf_part_runtime *runtime; /* common runtime */
+	void *eviction_runtime; /* volatile, policy-private runtime */
 	ocf_part_id_t id;
 };
 

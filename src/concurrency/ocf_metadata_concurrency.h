@@ -2,6 +2,7 @@
  * Copyright(c) 2019-2021 Intel Corporation
  * Copyright(c) 2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include "../ocf_cache_priv.h"
@@ -73,6 +74,40 @@ static inline void ocf_metadata_lru_unlock_all(
 
 #define OCF_METADATA_LRU_UNLOCK_ALL() \
 	ocf_metadata_lru_unlock_all(&cache->metadata.lock)
+
+/* LFU Locks */
+
+static inline void ocf_metadata_lfu_lock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_spinlock_lock(&metadata_lock->lfu[freq]);
+}
+
+static inline void ocf_metadata_lfu_unlock(
+		struct ocf_metadata_lock *metadata_lock, unsigned freq)
+{
+	env_spinlock_unlock(&metadata_lock->lfu[freq]);
+}
+
+static inline void ocf_metadata_lfu_lock_all(
+		struct ocf_metadata_lock *metadata_lock)
+{
+	uint32_t i;
+
+	for (i = 0; i < LFU_NUM_SHARDS; i++)
+		ocf_metadata_lfu_lock(metadata_lock, i);
+}
+
+static inline void ocf_metadata_lfu_unlock_all(
+		struct ocf_metadata_lock *metadata_lock)
+{
+	uint32_t i;
+
+	for (i = 0; i < LFU_NUM_SHARDS; i++)
+		ocf_metadata_lfu_unlock(metadata_lock, i);
+}
+
+/* Metadata Partition Locks */
 
 static inline void ocf_metadata_partition_lock(
 		struct ocf_metadata_lock *metadata_lock,

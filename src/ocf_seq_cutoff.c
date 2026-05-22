@@ -2,6 +2,7 @@
  * Copyright(c) 2020-2021 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -54,7 +55,7 @@ static inline bool ocf_seq_cutoff_is_on(ocf_cache_t cache,
 	if (!ocf_cache_is_device_attached(cache))
 		return false;
 
-	return (ocf_lru_num_free(cache) <= SEQ_CUTOFF_FULL_MARGIN +
+	return (ocf_eviction_num_free(cache) <= SEQ_CUTOFF_FULL_MARGIN +
 			req->core_line_count);
 }
 

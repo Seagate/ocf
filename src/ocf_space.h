@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2022-2023 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -9,8 +10,6 @@
 #define __LAYER_EVICTION_POLICY_H__
 
 #include "ocf/ocf.h"
-#include "ocf_lru.h"
-#include "ocf_lru_structs.h"
 
 #define OCF_NUM_LRU_LISTS 32
 #define OCF_LRU_CHUNK_SIZE 256
@@ -18,6 +17,13 @@
 
 #define OCF_LRU_GET_LIST_INDEX(cline) \
 	(((cline) / OCF_LRU_CHUNK_SIZE) % OCF_NUM_LRU_LISTS)
+
+#define LFU_MAX_FREQ 16  // Maximum frequency bucket count
+#define LFU_NUM_SHARDS 32
+#define LFU_CHUNK_SIZE 256
+
+#define OCF_LFU_STRIPE_SIZE (LFU_NUM_SHARDS * LFU_CHUNK_SIZE)
+#define OCF_LFU_GET_SHARD_INDEX(cline) (((cline) / LFU_CHUNK_SIZE) % LFU_NUM_SHARDS)
 
 struct ocf_part;
 struct ocf_user_part;

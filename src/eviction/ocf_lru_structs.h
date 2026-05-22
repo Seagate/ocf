@@ -31,6 +31,10 @@ struct ocf_lru_part_meta {
 	struct ocf_lru_list dirty;
 };
 
+struct ocf_lru_part_runtime {
+	struct ocf_lru_part_meta lru[OCF_NUM_LRU_LISTS];
+};
+
 #define OCF_LRU_HOT_RATIO 2
 
 #endif

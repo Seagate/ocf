@@ -4,7 +4,7 @@
  */
 
 /*
- * <tested_file_path>src/ocf_lru.c</tested_file_path>
+ * <tested_file_path>src/eviction/ocf_lru.c</tested_file_path>
  * <tested_function>_lru_init</tested_function>
  * <functions_to_leave>
  * 	update_lru_head
@@ -32,7 +32,7 @@
 #include <cmocka.h>
 #include "print_desc.h"
 
-#include "ocf_space.h"
+#include "../ocf_space.h"
 #include "ocf_lru.h"
 #include "ops.h"
 #include "../utils/utils_cleaner.h"
@@ -42,7 +42,7 @@
 #include "../engine/engine_zero.h"
 #include "../ocf_request.h"
 
-#include "ocf_lru.c/lru_generated_wraps.c"
+#include "eviction/ocf_lru.c/lru_generated_wraps.c"
 
 #define META_COUNT 128
 
@@ -60,7 +60,7 @@ __wrap_ocf_metadata_get_lru(ocf_cache_t cache, ocf_cache_line_t line)
 	return &meta[line];
 }
 
-static const unsigned end_marker = -1;
+static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
 
 static void _lru_init_test01(void **state)
 {

@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -279,6 +280,26 @@ typedef enum {
 	ocf_promotion_default = ocf_promotion_always,
 		/*!< Default promotion policy */
 } ocf_promotion_t;
+
+/**
+ * OCF supported eviction policy types
+ */
+typedef enum {
+	ocf_eviction_lru = 0,
+	/*!< Least Recently Used (LRU) policy */
+
+	ocf_eviction_lfu,
+	/*!< Least Frequently Used (LFU) policy */
+
+	ocf_eviction_max,
+	/*!< Stopper of enumerator */
+
+	ocf_eviction_default = ocf_eviction_lru,
+	/*!< Default eviction policy*/
+
+	ocf_eviction_none = -1,
+	/*!< Safeguard for checking undefined input*/
+} ocf_eviction_t;
 
 /**
  * OCF supported Write-Back cleaning policies type

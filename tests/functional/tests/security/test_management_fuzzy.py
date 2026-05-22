@@ -1,6 +1,7 @@
 #
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -27,7 +28,7 @@ from tests.utils.random import (
     DefaultRanges,
     RandomStringGenerator,
 )
-from pyocf.types.shared import OcfError, CacheLineSize, SeqCutOffPolicy
+from pyocf.types.shared import OcfError, CacheLineSize, SeqCutOffPolicy, EvictionPolicy
 from ctypes import c_uint64, c_uint32, c_uint8
 
 

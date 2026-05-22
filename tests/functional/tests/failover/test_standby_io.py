@@ -1,6 +1,7 @@
 #
 # Copyright(c) 2022 Intel Corporation
 # Copyright(c) 2024 Huawei Technologies
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -9,7 +10,7 @@ from datetime import timedelta
 
 from pyocf.types.volume import RamVolume
 from pyocf.types.volume_cache import CacheVolume
-from pyocf.types.cache import Cache, CacheMetadataSegment
+from pyocf.types.cache import Cache, CacheMetadataSegment, EvictionPolicy
 from pyocf.types.queue import Queue
 from pyocf.utils import Size
 from pyocf.types.shared import CacheLineSize
@@ -19,7 +20,8 @@ from pyocf.helpers import get_metadata_segment_page_location, get_metadata_segme
 
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
-def test_test_standby_io(pyocf_ctx, cacheline_size):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_test_standby_io(pyocf_ctx, cacheline_size, eviction_policy):
     num_jobs = 8
     qd = 16
     runtime = 5
@@ -27,7 +29,7 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
     vol_size = Size.from_MiB(100)
     cache_vol = RamVolume(vol_size)
 
-    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cacheline_size)
+    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cacheline_size, eviction_policy=eviction_policy)
 
     cache.start_cache(init_default_io_queue=False)
 
@@ -53,7 +55,8 @@ def test_test_standby_io(pyocf_ctx, cacheline_size):
 
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
-def test_test_standby_io_metadata(pyocf_ctx, cacheline_size):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_test_standby_io_metadata(pyocf_ctx, cacheline_size, eviction_policy):
     num_jobs = 8
     qd = 16
     runtime = 10
@@ -61,7 +64,7 @@ def test_test_standby_io_metadata(pyocf_ctx, cacheline_size):
     vol_size = Size.from_MiB(200)
     cache_vol = RamVolume(vol_size)
 
-    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cacheline_size)
+    cache = Cache(owner=OcfCtx.get_default(), cache_line_size=cacheline_size, eviction_policy=eviction_policy)
 
     cache.start_cache(init_default_io_queue=False)
 

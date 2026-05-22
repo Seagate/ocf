@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2023-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -100,6 +101,12 @@ ocf_cache_mode_t ocf_cache_get_mode(ocf_cache_t cache)
 	OCF_CHECK_NULL(cache);
 
 	return cache->conf_meta->cache_mode;
+}
+
+ocf_eviction_t ocf_cache_get_eviction_policy(ocf_cache_t cache) {
+	OCF_CHECK_NULL(cache);
+
+	return cache->eviction_policy;
 }
 
 static uint64_t _calc_dirty_for(uint64_t dirty_since)
@@ -230,6 +237,7 @@ int ocf_cache_get_info(ocf_cache_t cache, struct ocf_cache_info *info)
 	info->cleaning_policy = cache->cleaner.policy;
 	info->promotion_policy = cache->conf_meta->promotion_policy_type;
 	info->prefetch_mask = cache->conf_meta->prefetch_mask;
+	info->eviction_policy = cache->conf_meta->eviction_policy_type;
 	info->cache_line_size = ocf_line_size(cache);
 
 	return 0;

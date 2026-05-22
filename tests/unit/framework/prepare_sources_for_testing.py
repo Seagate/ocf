@@ -154,9 +154,16 @@ class UnitTestsSourcesGenerator(object):
     def prepare_autowraps(self, test_file_path, preprocessed_file_path):
         functions_to_wrap = self.get_functions_calls(
             self.get_sources_to_test_repo() + test_file_path)
+
+        print(f"[DEBUG] functions_to_wrap: {functions_to_wrap}")
+
         user_wraps = set(self.get_user_wraps(self.get_main_UT_dir() + test_file_path))
 
+        print(f"[DEBUG] user_wraps: {user_wraps}")
+
         functions_to_wrap = functions_to_wrap - user_wraps
+
+        print(f"[DEBUG] functions_to_wrap: {functions_to_wrap}")
 
         tags_list = self.get_functions_list(preprocessed_file_path, prototypes=True)
 

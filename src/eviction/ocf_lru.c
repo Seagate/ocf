@@ -6,24 +6,29 @@
  */
 
 #include "ocf_env.h"
-#include "ocf_space.h"
 #include "ocf_env_refcnt.h"
 #include "ocf_lru.h"
-#include "utils/utils_cleaner.h"
-#include "utils/utils_cache_line.h"
-#include "utils/utils_generator.h"
-#include "utils/utils_parallelize.h"
-#include "concurrency/ocf_concurrency.h"
-#include "mngt/ocf_mngt_common.h"
-#include "engine/engine_zero.h"
-#include "ocf_cache_priv.h"
-#include "ocf_request.h"
-#include "engine/engine_common.h"
-#include "utils/utils_user_part.h"
+#include "../utils/utils_cleaner.h"
+#include "../utils/utils_cache_line.h"
+#include "../utils/utils_generator.h"
+#include "../utils/utils_parallelize.h"
+#include "../concurrency/ocf_concurrency.h"
+#include "../mngt/ocf_mngt_common.h"
+#include "../engine/engine_zero.h"
+#include "../ocf_cache_priv.h"
+#include "../ocf_request.h"
+#include "../engine/engine_common.h"
+#include "../utils/utils_user_part.h"
 
 #define OCF_LRU_MAX_LRU_ELEMENT_IDX 256
 
 static const ocf_cache_line_t end_marker = OCF_CACHE_LINE_INVALID;
+
+/* Helper to get the partition eviction runtime information */
+static inline struct ocf_lru_part_runtime *ocf_part_lru(struct ocf_part *part)
+{
+    return (struct ocf_lru_part_runtime*)(part->eviction_runtime);
+}
 
 /* update list last_hot index. returns pivot element (the one for which hot
  * status effectively changes during balancing). */
@@ -216,7 +221,7 @@ void ocf_lru_detach(ocf_cache_t cache, struct ocf_part *part,
 	ocf_lru_repart(cache, cline, part, &cache->free_detached);
 }
 
-void ocf_lru_restore(ocf_cache_t cache, ocf_cache_line_t cline)
+void ocf_lru_reattach(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	ocf_lru_repart(cache, cline, &cache->free_detached, &cache->free);
 }
@@ -243,11 +248,15 @@ void ocf_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 struct ocf_lru_list *ocf_lru_get_list(struct ocf_part *part,
 		uint32_t lru_idx, bool clean)
 {
+	struct ocf_lru_part_runtime *rt = ocf_part_lru(part);
+
+	ENV_BUG_ON(!rt);
+
 	if (part->id == PARTITION_FREELIST)
 		clean = true;
 
-	return clean ? &part->runtime->lru[lru_idx].clean :
-			&part->runtime->lru[lru_idx].dirty;
+	return clean ? &rt->lru[lru_idx].clean :
+			&rt->lru[lru_idx].dirty;
 }
 
 static inline struct ocf_lru_list *lru_get_cline_list(ocf_cache_t cache,
@@ -434,8 +443,9 @@ static inline bool _lru_iter_eviction_lock(struct ocf_lru_iter *iter,
 {
 	struct ocf_request *req = iter->req;
 
-	if (!ocf_cache_line_try_lock_wr(iter->c, cache_line))
+	if (!ocf_cache_line_try_lock_wr(iter->c, cache_line)) {
 		return false;
+	}
 
 	ocf_metadata_get_core_info(iter->cache, cache_line,
 		core_id, core_line);
@@ -914,8 +924,9 @@ void ocf_lru_hot_cline(ocf_cache_t cache, ocf_cache_line_t cline)
 	 * line that just turned hot. In return we avoid expensive
 	 * locking on a very common code path.
 	 */
-	if (node->hot)
+	if (node->hot) {
 		return;
+	}
 
 	part = &cache->user_parts[node->partition_id].part;
 	clean = !metadata_test_dirty(cache, cline);
@@ -940,6 +951,40 @@ static inline void _lru_init(struct ocf_lru_list *list, bool track_hot)
 	list->num_hot = 0;
 	list->last_hot = end_marker;
 	list->track_hot = track_hot;
+}
+
+/*
+ * Allocate and initialize LRU runtime for a single partition.
+ * Call this from your eviction-policy init path for every partition.
+ */
+int ocf_lru_init_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	struct ocf_lru_part_runtime *rt;
+
+	rt = env_vzalloc(sizeof(*rt));
+	if (!rt)
+		return -OCF_ERR_NO_MEM;
+
+	part->eviction_runtime = rt;
+
+	ocf_lru_init(cache, part);
+
+	ocf_cache_log(cache, log_info, "LRU initialized for part %u", part->id);
+
+	return 0;
+}
+
+/*
+ * Free per-part LRU runtime.
+ * Call this from your eviction-policy deinit / switch path.
+ */
+void ocf_lru_deinit_part(ocf_cache_t cache, struct ocf_part *part)
+{
+	if (!part->eviction_runtime)
+		return;
+
+	env_vfree(part->eviction_runtime);
+	part->eviction_runtime = NULL;
 }
 
 void ocf_lru_init(ocf_cache_t cache, struct ocf_part *part)
@@ -1004,7 +1049,7 @@ struct ocf_lru_populate_context {
 	ocf_cache_t cache;
 	env_atomic curr_size;
 
-	ocf_lru_populate_end_t cmpl;
+	ocf_eviction_populate_end_t cmpl;
 	void *priv;
 };
 
@@ -1092,7 +1137,7 @@ static void ocf_lru_populate_finish(ocf_parallelize_t parallelize,
 
 /* put invalid cachelines on freelist partition lru list  */
 void ocf_lru_populate(ocf_cache_t cache,
-		ocf_lru_populate_end_t cmpl, void *priv)
+		ocf_eviction_populate_end_t cmpl, void *priv)
 {
 	struct ocf_lru_populate_context *context;
 	ocf_parallelize_t parallelize;
@@ -1115,30 +1160,6 @@ void ocf_lru_populate(ocf_cache_t cache,
 	ocf_parallelize_run(parallelize);
 }
 
-static bool _is_cache_line_acting(struct ocf_cache *cache,
-		uint32_t cache_line, ocf_core_id_t core_id,
-		uint64_t start_line, uint64_t end_line)
-{
-	ocf_core_id_t tmp_core_id;
-	uint64_t core_line;
-
-	ocf_metadata_get_core_info(cache, cache_line,
-		&tmp_core_id, &core_line);
-
-	if (core_id != OCF_CORE_ID_INVALID) {
-		if (core_id != tmp_core_id)
-			return false;
-
-		if (core_line < start_line || core_line > end_line)
-			return false;
-
-	} else if (tmp_core_id == OCF_CORE_ID_INVALID) {
-		return false;
-	}
-
-	return true;
-}
-
 /*
  * Iterates over cache lines that belong to the core device with
  * core ID = core_id  whose core byte addresses are in the range
@@ -1149,7 +1170,7 @@ static bool _is_cache_line_acting(struct ocf_cache *cache,
  *
  * global metadata write lock must be held before calling this function
  */
-int ocf_metadata_actor(struct ocf_cache *cache,
+int ocf_lru_metadata_actor(struct ocf_cache *cache,
 		ocf_part_id_t part_id, ocf_core_id_t core_id,
 		uint64_t start_byte, uint64_t end_byte,
 		ocf_metadata_actor_t actor)
@@ -1212,11 +1233,6 @@ int ocf_metadata_actor(struct ocf_cache *cache,
 	return ret;
 }
 
-uint32_t ocf_lru_num_free(ocf_cache_t cache)
-{
-	return env_atomic_read(&cache->free.runtime->curr_size);
-}
-
 void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
 {
 	uint32_t lru_list = OCF_LRU_GET_LIST_INDEX(cline);
@@ -1224,4 +1240,149 @@ void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline)
 
 	list = ocf_lru_get_list(&cache->free, lru_list, true);
 	add_lru_head_nobalance(cache, list, cline);
+}
+
+
+/**
+ * Functions to restore metadata from flushed data on clean shutdown
+ */
+
+ /**
+  * @brief Reconstruct metadata for a cline from flushed data
+  */
+static int ocf_lru_restore_cline(ocf_cache_t cache, ocf_cache_line_t cline)
+{
+	struct ocf_lru_meta *node, *next_node = NULL, *prev_node = NULL;
+	struct ocf_lru_list *list;
+	struct ocf_part *part;
+	ocf_core_id_t core_id;
+	uint64_t core_line;
+	ocf_part_id_t part_id;
+	bool dirty, valid;
+
+	ocf_metadata_get_core_info(cache, cline, &core_id, &core_line);
+
+	if (!ocf_metadata_check(cache, cline) || core_id > OCF_CORE_NUM) {
+		// ocf_cache_log(cache, log_err,
+		// 	"[ocf_lru_restore_cline] invalid metadata: cline=%u core_id=%u\n",
+		// 	cline, core_id);
+		return -OCF_ERR_INVAL;
+	}
+
+	valid = metadata_test_valid_any(cache, cline);
+	node = ocf_metadata_get_lru(cache, cline);
+
+	if (!valid || core_id == OCF_CORE_NUM) { // If cline is free, put into free list
+		part = &cache->free;
+		list = ocf_lru_get_list(part, OCF_LRU_GET_LIST_INDEX(cline), true);
+		env_atomic_inc(&cache->free.runtime->curr_size);
+
+		if (node->hot) {
+			// ocf_cache_log(cache, log_err,
+			// 	"[restore] free line marked hot: cline=%u prev=%u next=%u\n",
+			// 	cline, node->prev, node->next);
+			return -OCF_ERR_INVAL;
+		}
+	} else {
+		part_id = ocf_metadata_get_partition_id(cache, cline);
+
+		if (part_id > OCF_USER_IO_CLASS_MAX) {
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]part_id = %u > %d", part_id, OCF_USER_IO_CLASS_MAX);
+			return -OCF_ERR_INVAL;
+		}	
+			
+		dirty = metadata_test_dirty(cache, cline);
+
+		part = &cache->user_parts[part_id].part;
+		list = ocf_lru_get_list(part, OCF_LRU_GET_LIST_INDEX(cline), !dirty);
+		env_atomic_inc(&part->runtime->curr_size);
+	}
+
+	if (node->prev != end_marker)
+		prev_node = ocf_metadata_get_lru(cache, node->prev);
+
+	if (node->next != end_marker)
+		next_node = ocf_metadata_get_lru(cache, node->next);
+
+	// Check neighbor consistency
+	if (prev_node && prev_node->next != cline) {
+		// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]prev neighbor is inconsistent: prev_node->next = %u", prev_node->next);
+		return -OCF_ERR_INVAL;
+	}
+		
+
+	if (next_node && next_node->prev != cline) {
+		// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]next neighbor is inconsistent: next_node->prev = %u", next_node->prev);
+		return -OCF_ERR_INVAL;
+	}
+		
+	list->num_nodes++;
+
+	if (node->prev == end_marker) {
+		if (list->head != end_marker) {
+			// struct ocf_lru_meta *head_node = ocf_metadata_get_lru(cache, list->head);
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not head. head = %u", list->head);
+
+			// ocf_cache_log(cache, log_err,
+			// 	"[ocf_lru_restore_cline] existing head meta: cline=%u prev=%u next=%u hot=%u\n",
+			// 	list->head, head_node->prev, head_node->next, head_node->hot);
+			return -OCF_ERR_INVAL;
+		}
+			
+		list->head = cline;
+	}
+
+	if (node->next == end_marker) {
+		if (list->tail != end_marker) {
+			// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]node is not tail. tail = %u", list->tail);
+			return -OCF_ERR_INVAL;
+		}
+		list->tail = cline;
+	}
+
+	// Restore hotness information
+	if (list->track_hot && node->hot) {
+		list->num_hot++;
+
+		if (node->next == end_marker ||
+		    !ocf_metadata_get_lru(cache, node->next)->hot) {
+			if (list->last_hot != end_marker) {
+				// ocf_cache_log(cache, log_err, "[ocf_lru_restore_cline]duplicate last_hot: cline=%u last_hot=%u "
+				// 	"part=%u clean=%d lru_idx=%u\n",
+				// 	cline, list->last_hot, part_id, !dirty, OCF_LRU_GET_LIST_INDEX(cline));
+				return -OCF_ERR_INVAL;
+			}
+			list->last_hot = cline;
+		}
+	}
+
+	return 0;
+}
+
+ /**
+  * @brief Restore runtime information from flushed data
+  */
+int ocf_lru_restore_runtime(ocf_cache_t cache)
+{
+	ocf_cache_line_t cline;
+	ocf_cache_line_t entries = ocf_metadata_collision_table_entries(cache);
+	int ret;
+
+	// Reset runtime
+	ocf_part_id_t part_id;
+
+	for (part_id = 0; part_id < OCF_USER_IO_CLASS_MAX; part_id++)
+		ocf_lru_init(cache, &cache->user_parts[part_id].part);
+
+	ocf_lru_init(cache, &cache->free);
+	ocf_lru_init(cache, &cache->free_detached);
+
+	// Restore clines
+	for (cline = 0; cline < entries; cline++) {
+		ret = ocf_lru_restore_cline(cache, cline);
+		if (ret)
+			return ret;
+	}
+
+	return ret;
 }

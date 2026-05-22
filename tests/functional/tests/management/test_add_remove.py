@@ -1,6 +1,7 @@
 #
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2024-2025 Huawei Technologies
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -8,7 +9,7 @@ import pytest
 from ctypes import c_int
 
 from random import randint
-from pyocf.types.cache import Cache, CacheMode, CleaningPolicy, PromotionPolicy
+from pyocf.types.cache import Cache, CacheMode, CleaningPolicy, PromotionPolicy, EvictionPolicy
 from pyocf.types.core import Core
 from pyocf.types.volume import RamVolume, Volume
 from pyocf.types.volume_core import CoreVolume
@@ -22,10 +23,11 @@ from pyocf.rio import Rio, ReadWrite
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_adding_core(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_adding_core(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Create core device
     core_device = RamVolume(S.from_MiB(10))
@@ -45,10 +47,11 @@ def test_adding_core(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_removing_core(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_removing_core(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Create core device
     core_device = RamVolume(S.from_MiB(10))
@@ -67,10 +70,11 @@ def test_removing_core(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cache_mode", [CacheMode.WB])
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_remove_dirty_no_flush(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_remove_dirty_no_flush(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Create core device
     core_device = RamVolume(S.from_MiB(10))
@@ -92,12 +96,13 @@ def test_remove_dirty_no_flush(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_detach_core_detach_cache_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_core_detach_cache_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -115,12 +120,13 @@ def test_detach_core_detach_cache_cleaning(pyocf_ctx, cleaning_policy, promotion
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_detach_core_stop_cache_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_core_stop_cache_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -137,12 +143,13 @@ def test_detach_core_stop_cache_cleaning(pyocf_ctx, cleaning_policy, promotion_p
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_detach_cache_detach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_cache_detach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -170,12 +177,13 @@ def test_detach_cache_detach_core_cleaning(pyocf_ctx, cleaning_policy, promotion
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_detach_cache_retach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_cache_retach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -216,12 +224,13 @@ def test_detach_cache_retach_core_cleaning(pyocf_ctx, cleaning_policy, promotion
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_reattach_cache_reattach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_reattach_cache_reattach_core_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -258,12 +267,13 @@ def test_reattach_cache_reattach_core_cleaning(pyocf_ctx, cleaning_policy, promo
 
 @pytest.mark.parametrize("cleaning_policy", CleaningPolicy)
 @pytest.mark.parametrize("promotion_policy", PromotionPolicy)
-def test_detach_cache_detach_core_load_cleaning(pyocf_ctx, cleaning_policy, promotion_policy):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_detach_cache_detach_core_load_cleaning(pyocf_ctx, cleaning_policy, promotion_policy, eviction_policy):
     cache_device = RamVolume(S.from_MiB(100))
     core_device_1 = RamVolume(S.from_MiB(10))
     core_device_2 = RamVolume(S.from_MiB(10))
 
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WB, eviction_policy=eviction_policy)
     core_1 = Core.using_device(core_device_1, name="core_1")
     core_2 = Core.using_device(core_device_2, name="core_2")
 
@@ -391,10 +401,11 @@ def test_adding_to_random_cache(pyocf_ctx):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_adding_core_twice(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_adding_core_twice(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Create core device
     core_device = RamVolume(S.from_MiB(10))
@@ -414,17 +425,18 @@ def test_adding_core_twice(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_adding_core_already_used(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_adding_core_already_used(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start first cache device
     cache_device1 = RamVolume(S.from_MiB(50))
     cache1 = Cache.start_on_device(
-        cache_device1, cache_mode=cache_mode, cache_line_size=cls, name="cache1"
+        cache_device1, cache_mode=cache_mode, cache_line_size=cls, name="cache1", eviction_policy=eviction_policy
     )
 
     # Start second cache device
     cache_device2 = RamVolume(S.from_MiB(50))
     cache2 = Cache.start_on_device(
-        cache_device2, cache_mode=cache_mode, cache_line_size=cls, name="cache2"
+        cache_device2, cache_mode=cache_mode, cache_line_size=cls, name="cache2", eviction_policy=eviction_policy
     )
 
     # Create core device
@@ -448,10 +460,11 @@ def test_adding_core_already_used(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_add_remove_incrementally(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_add_remove_incrementally(pyocf_ctx, cache_mode, cls, eviction_policy):
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core_devices = []
     core_amount = 5
 
@@ -502,7 +515,8 @@ def _io_to_core(vol: Volume, queue: Queue, data: Data):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_try_add_core_with_changed_size(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_try_add_core_with_changed_size(pyocf_ctx, cache_mode, cls, eviction_policy):
     """
     Test changing volume size before load
     :param pyocf_ctx: basic pyocf context fixture
@@ -511,7 +525,7 @@ def test_try_add_core_with_changed_size(pyocf_ctx, cache_mode, cls):
     """
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Add core to cache
     core_device = RamVolume(S.from_MiB(10))
@@ -534,7 +548,8 @@ def test_try_add_core_with_changed_size(pyocf_ctx, cache_mode, cls):
 
 @pytest.mark.parametrize("cache_mode", CacheMode)
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_load_with_changed_core_size(pyocf_ctx, cache_mode, cls):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_load_with_changed_core_size(pyocf_ctx, cache_mode, cls, eviction_policy):
     """
     Test changing volume size before load
     :param pyocf_ctx: basic pyocf context fixture
@@ -543,7 +558,7 @@ def test_load_with_changed_core_size(pyocf_ctx, cache_mode, cls):
     """
     # Start cache device
     cache_device = RamVolume(S.from_MiB(50))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
 
     # Add core to cache
     core_device = RamVolume(S.from_MiB(10))

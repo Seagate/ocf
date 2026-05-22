@@ -1,6 +1,7 @@
 /*
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -9,7 +10,7 @@
 #include "../ocf_request.h"
 #include "../metadata/metadata.h"
 #include "../engine/cache_engine.h"
-#include "../ocf_lru.h"
+#include "../eviction/ocf_lru.h"
 #include "utils_user_part.h"
 
 static struct ocf_lst_entry *ocf_user_part_lst_getter_valid(
@@ -139,7 +140,7 @@ void ocf_user_part_move(struct ocf_request *req)
 			ocf_cleaning_purge_cache_block(cache, line);
 		}
 
-		ocf_lru_repart(cache, line, &cache->user_parts[id_old].part,
+		ocf_eviction_repart(cache, line, &cache->user_parts[id_old].part,
 				&cache->user_parts[id_new].part);
 
 		/* Check if cache line is dirty. If yes then need to change

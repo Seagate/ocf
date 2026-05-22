@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2023-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -82,6 +83,9 @@ struct ocf_cache_info {
 
 	ocf_pf_mask_t prefetch_mask;
 		/*!< Prefetchers selected (bitmask) */
+		
+	ocf_eviction_t eviction_policy;
+		/*! < Eviction policy selected */
 
 	ocf_cache_line_size_t cache_line_size;
 		/*!< Cache line size in KiB */
@@ -187,6 +191,15 @@ bool ocf_cache_is_standby(ocf_cache_t cache);
  * @retval Cache mode
  */
 ocf_cache_mode_t ocf_cache_get_mode(ocf_cache_t cache);
+
+/**
+ * @brief Get eviction policy of given cache object
+ *
+ * @param[in] cache Cache object
+ *
+ * @retval Cache mode
+ */
+ocf_eviction_t ocf_cache_get_eviction_policy(ocf_cache_t cache);
 
 /**
  * @brief Get cache line size of given cache object

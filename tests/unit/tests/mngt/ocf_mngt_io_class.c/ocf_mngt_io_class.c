@@ -32,7 +32,7 @@
 #include "../metadata/metadata.h"
 #include "../engine/cache_engine.h"
 #include "../utils/utils_user_part.h"
-#include "../ocf_lru.h"
+#include "../eviction/ocf_lru.h"
 #include "ocf_env.h"
 
 #include "mngt/ocf_mngt_io_class.c/ocf_mngt_io_class_generated_wraps.c"
@@ -100,7 +100,8 @@ static inline void setup_valid_config(struct ocf_mngt_io_class_config *cfg,
 	int i;
 	for (i = 0; i < OCF_USER_IO_CLASS_MAX; i++) {
 		cfg[i].class_id = i;
-		cfg[i].name = remove ? NULL : i == 0 ? "unclassified" :"test_io_class_name" ;
+		cfg[i].name = remove ? NULL : i == OCF_IO_CLASS_UNCLASSIFIED ? OCF_IO_CLASS_UNCLASSIFIED_NAME : 
+			i == OCF_IO_CLASS_PREFETCH ? OCF_IO_CLASS_PREFETCH_NAME : "test_io_class_name" ;
 		cfg[i].prio = i;
 		cfg[i].cache_mode = ocf_cache_mode_pt;
 		cfg[i].max_size = 20*i;
@@ -167,7 +168,9 @@ static void ocf_mngt_io_classes_configure_test02(void **state)
 				test_malloc(sizeof(struct ocf_user_part_config));
 	}
 
-	strcpy(cache->user_parts[0].config->name, "unclassified");
+	strcpy(cache->user_parts[OCF_IO_CLASS_UNCLASSIFIED].config->name, OCF_IO_CLASS_UNCLASSIFIED_NAME);
+	strcpy(cache->user_parts[OCF_IO_CLASS_PREFETCH].config->name, OCF_IO_CLASS_PREFETCH_NAME);
+
 	cache->device = 1;
 
 	setup_valid_config(cfg.config, false);
@@ -179,20 +182,20 @@ static void ocf_mngt_io_classes_configure_test02(void **state)
 		will_return(__wrap__ocf_mngt_io_class_validate_cfg, 0);
 	}
 
-	/* Configure default io_class */
-	expect_function_call(__wrap_ocf_user_part_is_added);
-	will_return(__wrap_ocf_user_part_is_added, 1);
-
-	expect_function_call(__wrap__ocf_mngt_set_partition_size);
-	will_return(__wrap__ocf_mngt_set_partition_size, 0);
-
-	expect_function_call(__wrap_ocf_user_part_set_prio);
-
-	/* Configure custom io_classes */
-	for (i = 1; i < OCF_USER_IO_CLASS_MAX; i++) {
+	for (i = 0; i < OCF_USER_IO_CLASS_MAX; i++) {
 		expect_function_call(__wrap_ocf_user_part_is_added);
 		will_return(__wrap_ocf_user_part_is_added, 1);
 
+		/* Configure default classes */
+		if (i == OCF_IO_CLASS_UNCLASSIFIED || i == OCF_IO_CLASS_PREFETCH) {
+			expect_function_call(__wrap__ocf_mngt_set_partition_size);
+			will_return(__wrap__ocf_mngt_set_partition_size, 0);
+
+			expect_function_call(__wrap_ocf_user_part_set_prio);
+			continue;
+		}
+
+		/* Configure custom io_classes */
 		expect_function_call(__wrap__ocf_mngt_set_partition_size);
 		will_return(__wrap__ocf_mngt_set_partition_size, 0);
 

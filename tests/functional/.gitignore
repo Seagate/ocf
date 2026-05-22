@@ -7,3 +7,7 @@ pyocf/ocf/*
 *.gcov
 *.gcda
 *.gcno
+asan_output.txt
+tsan_output.txt
+ubsan_output.txt
+config/random.cfg

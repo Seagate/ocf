@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2023 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -71,6 +72,9 @@ struct ocf_metadata_probe_status {
 
 	/** Probed name of cache instance */
 	char cache_name[OCF_CACHE_NAME_SIZE];
+
+	/** Probed eviction policy */
+	ocf_eviction_t eviction_policy;
 };
 
 /**

@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -13,6 +14,7 @@
 #include "../promotion/promotion.h"
 #include "ocf/ocf_prefetch.h"
 #include "../prefetch/ocf_prefetch_priv.h"
+#include "../eviction/ocf_eviction.h"
 
 #define CACHE_MAGIC_NUMBER	0x187E1CA6
 
@@ -58,6 +60,9 @@ struct ocf_superblock_config {
 
 	ocf_pf_mask_t prefetch_mask;
 	struct prefetch_policy_config prefetch[PREFETCH_POLICY_TYPE_MAX];
+	
+	ocf_eviction_t eviction_policy_type;
+	struct eviction_policy_config eviction[EVICTION_POLICY_TYPE_MAX];
 
 	/*
 	 * Checksum for each metadata region.

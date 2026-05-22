@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2024-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -38,7 +39,9 @@ static void __set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 	if (ocf_cache_line_are_waiters(ocf_cache_line_concurrency(cache), line))
 		return;
 
-	ocf_lru_rm_cline(cache, line);
+	// ocf_lru_rm_cline(cache, line);
+	// ocf_lfu_rm_cline(cache, line);
+	ocf_eviction_rm_cline(cache, line);
 	ocf_metadata_remove_cache_line(cache, line);
 }
 
@@ -82,7 +85,7 @@ delete_invalid:
 	 * Even if the cache line was on the freelist,
 	 * it must be set as unavailable.
 	 */
-	ocf_lru_detach(cache, part, line);
+	ocf_eviction_detach(cache, part, line);
 }
 
 void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
@@ -106,7 +109,7 @@ void set_cache_line_invalid(struct ocf_cache *cache, uint8_t start_bit,
 
 void set_cache_line_available(struct ocf_cache *cache, ocf_cache_line_t line)
 {
-	ocf_lru_restore(cache, line);
+	ocf_eviction_reattach(cache, line);
 }
 
 void set_cache_line_unavailable(struct ocf_cache *cache, uint8_t start_bit,
@@ -184,7 +187,7 @@ void set_cache_line_clean(struct ocf_cache *cache, uint8_t start_bit,
 			 */
 			env_atomic_dec(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
-			ocf_lru_clean_cline(cache, part, line);
+			ocf_eviction_clean_cline(cache, part, line);
 			ocf_purge_cleaning_policy(cache, line);
 		}
 	}
@@ -226,7 +229,8 @@ void set_cache_line_dirty(struct ocf_cache *cache, uint8_t start_bit,
 			 */
 			env_atomic_inc(&req->core->runtime_meta->
 					part_counters[part_id].dirty_clines);
-			ocf_lru_dirty_cline(cache, part, line);
+
+			ocf_eviction_dirty_cline(cache, part, line);
 		}
 	}
 

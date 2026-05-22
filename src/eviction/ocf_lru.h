@@ -7,8 +7,7 @@
 #ifndef __EVICTION_LRU_H__
 #define __EVICTION_LRU_H__
 
-#include "ocf_space.h"
-#include "ocf_lru_structs.h"
+#include "ocf_eviction.h"
 
 struct ocf_part;
 struct ocf_user_part;
@@ -16,6 +15,8 @@ struct ocf_part_runtime;
 struct ocf_part_cleaning_ctx;
 struct ocf_request;
 
+int ocf_lru_init_part(ocf_cache_t cache, struct ocf_part *part);
+void ocf_lru_deinit_part(ocf_cache_t cache, struct ocf_part *part);
 void ocf_lru_init_cline(ocf_cache_t cache, ocf_cache_line_t cline);
 void ocf_lru_rm_cline(struct ocf_cache *cache, ocf_cache_line_t cline);
 bool ocf_lru_can_evict(struct ocf_cache *cache);
@@ -33,16 +34,20 @@ void ocf_lru_clean(ocf_cache_t cache, struct ocf_user_part *user_part,
 void ocf_lru_repart(ocf_cache_t cache, ocf_cache_line_t cline,
 		struct ocf_part *src_upart, struct ocf_part *dst_upart);
 void ocf_lru_add_free(ocf_cache_t cache, ocf_cache_line_t cline);
-uint32_t ocf_lru_num_free(ocf_cache_t cache);
 struct ocf_lru_list *ocf_lru_get_list(struct ocf_part *part,
 		uint32_t lru_idx, bool clean);
 void ocf_lru_detach(ocf_cache_t cache, struct ocf_part *part,
 		ocf_cache_line_t cline);
-void ocf_lru_restore(ocf_cache_t cache, ocf_cache_line_t cline);
-
-typedef void (*ocf_lru_populate_end_t)(void *priv, int error);
+void ocf_lru_reattach(ocf_cache_t cache, ocf_cache_line_t cline);
 
 void ocf_lru_populate(ocf_cache_t cache,
-		ocf_lru_populate_end_t cmpl, void *priv);
+		ocf_eviction_populate_end_t cmpl, void *priv);
+
+int ocf_lru_restore_runtime(ocf_cache_t cache);
+
+int ocf_lru_metadata_actor(struct ocf_cache *cache,
+		ocf_part_id_t part_id, ocf_core_id_t core_id,
+		uint64_t start_byte, uint64_t end_byte,
+		ocf_metadata_actor_t actor);
 
 #endif

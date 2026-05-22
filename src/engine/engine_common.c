@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -206,8 +207,8 @@ void ocf_engine_set_hot(struct ocf_request *req)
 		status = entry->status;
 
 		if (status == LOOKUP_HIT || status == LOOKUP_HIT_INVALID) {
-			/* Update eviction (LRU) */
-			ocf_lru_hot_cline(cache, entry->coll_idx);
+			/* Update eviction */
+			ocf_eviction_hot_cline(cache, entry->coll_idx);
 		}
 	}
 }
@@ -540,7 +541,7 @@ int ocf_engine_prepare_clines(struct ocf_request *req)
 		for_each_user_part(cache, user_part, part_id) {
 			if (!ocf_user_part_is_valid(user_part))
 				continue;
-			ocf_lru_clean(cache, user_part, req->io_queue, 128);
+			ocf_eviction_clean(cache, user_part, req->io_queue, 128);
 		}
 	}
 

@@ -2,6 +2,7 @@
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2024-2025 Huawei Technologies
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -12,7 +13,7 @@ from ctypes import c_int
 
 import pytest
 
-from pyocf.types.cache import Cache, CacheMode
+from pyocf.types.cache import Cache, CacheMode, EvictionPolicy
 from pyocf.types.core import Core
 from pyocf.types.data import Data
 from pyocf.types.io import IoDir, Sync
@@ -26,13 +27,14 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", [CacheMode.WT])
-def test_eviction_two_cores(pyocf_ctx, mode: CacheMode, cls: CacheLineSize):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_eviction_two_cores(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, eviction_policy: EvictionPolicy):
     """Test if eviction works correctly when remapping cachelines between distinct cores."""
     cache_device = RamVolume(Size.from_MiB(50))
 
     core_device1 = RamVolume(Size.from_MiB(40))
     core_device2 = RamVolume(Size.from_MiB(40))
-    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, eviction_policy=eviction_policy)
     cache.set_seq_cut_off_policy(SeqCutOffPolicy.NEVER)
     cache_size = cache.get_stats()["conf"]["size"]
     core1 = Core.using_device(core_device1, name="core1")
@@ -58,12 +60,13 @@ def test_eviction_two_cores(pyocf_ctx, mode: CacheMode, cls: CacheLineSize):
 
 @pytest.mark.parametrize("cls", CacheLineSize)
 @pytest.mark.parametrize("mode", [CacheMode.WT, CacheMode.WB, CacheMode.WO])
-def test_write_size_greater_than_cache(pyocf_ctx, mode: CacheMode, cls: CacheLineSize):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_write_size_greater_than_cache(pyocf_ctx, mode: CacheMode, cls: CacheLineSize, eviction_policy: EvictionPolicy):
     """Test if eviction does not occur when IO greater than cache size is submitted."""
     cache_device = RamVolume(Size.from_MiB(50))
 
     core_device = RamVolume(Size.from_MiB(200))
-    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=mode, cache_line_size=cls, eviction_policy=eviction_policy)
     cache_size = cache.get_stats()["conf"]["size"]
     core = Core.using_device(core_device)
     cache.add_core(core)
@@ -120,11 +123,12 @@ def test_write_size_greater_than_cache(pyocf_ctx, mode: CacheMode, cls: CacheLin
     "cls", [CacheLineSize.LINE_4KiB, CacheLineSize.LINE_16KiB, CacheLineSize.LINE_64KiB]
 )
 @pytest.mark.parametrize("cache_mode", [CacheMode.WT, CacheMode.WB])
-def test_eviction_priority_1(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_eviction_priority_1(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir, eviction_policy: EvictionPolicy):
     """Verify if data of higher priority is not evicted by low priority data"""
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(200))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
     cache.add_core(core)
     vol = CoreVolume(core)
@@ -188,11 +192,12 @@ def test_eviction_priority_1(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMod
     ],
 )
 @pytest.mark.parametrize("cls", [CacheLineSize.LINE_16KiB, CacheLineSize.LINE_64KiB])
-def test_eviction_priority_2(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_eviction_priority_2(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir, eviction_policy: EvictionPolicy):
     """Verify if data of low priority gets evicted by high priority data"""
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(200))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
     cache.add_core(core)
     vol = CoreVolume(core)
@@ -250,11 +255,12 @@ def test_eviction_priority_2(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMod
 @pytest.mark.parametrize("io_dir", IoDir)
 @pytest.mark.parametrize("cls", [CacheLineSize.LINE_16KiB, CacheLineSize.LINE_64KiB])
 @pytest.mark.parametrize("cache_mode", [CacheMode.WT, CacheMode.WB])
-def test_eviction_freelist(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_eviction_freelist(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode, io_dir: IoDir, eviction_policy: EvictionPolicy):
     """Verify that no eviction from low priority ioclass occurs if free cachelines are avaliable"""
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(200))
-    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=cache_mode, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
     cache.add_core(core)
     vol = CoreVolume(core)
@@ -319,11 +325,12 @@ def test_eviction_freelist(pyocf_ctx, cls: CacheLineSize, cache_mode: CacheMode,
 
 
 @pytest.mark.parametrize("cls", CacheLineSize)
-def test_evict_overflown_pinned(pyocf_ctx, cls: CacheLineSize):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_evict_overflown_pinned(pyocf_ctx, cls: CacheLineSize, eviction_policy: EvictionPolicy):
     """ Verify if overflown pinned ioclass is evicted """
     cache_device = RamVolume(Size.from_MiB(50))
     core_device = RamVolume(Size.from_MiB(100))
-    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WT, cache_line_size=cls)
+    cache = Cache.start_on_device(cache_device, cache_mode=CacheMode.WT, cache_line_size=cls, eviction_policy=eviction_policy)
     core = Core.using_device(core_device)
     cache.add_core(core)
     vol = CoreVolume(core)

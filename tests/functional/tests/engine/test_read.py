@@ -2,6 +2,7 @@
 # Copyright(c) 2019-2022 Intel Corporation
 # Copyright(c) 2024 Huawei Technologies
 # Copyright(c) 2026 Unvertical
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -14,7 +15,7 @@ import random
 from hashlib import md5
 from tests.utils.random import get_random_seed
 
-from pyocf.types.cache import Cache, CacheMode
+from pyocf.types.cache import Cache, CacheMode, EvictionPolicy
 from pyocf.types.core import Core
 from pyocf.types.volume import RamVolume
 from pyocf.types.volume_core import CoreVolume
@@ -186,7 +187,8 @@ def print_test_case(
 
 @pytest.mark.parametrize("cacheline_size", CacheLineSize)
 @pytest.mark.parametrize("cache_mode", CacheMode)
-def test_read_data_consistency(pyocf_ctx, cacheline_size, cache_mode):
+@pytest.mark.parametrize("eviction_policy", EvictionPolicy)
+def test_read_data_consistency(pyocf_ctx, cacheline_size, cache_mode, eviction_policy):
     CACHELINE_COUNT = 9
     SECTOR_SIZE = Size.from_sector(1).B
     CLS = cacheline_size // SECTOR_SIZE
@@ -235,7 +237,7 @@ def test_read_data_consistency(pyocf_ctx, cacheline_size, cache_mode):
     core_device = RamVolume(Size.from_MiB(50))
 
     cache = Cache.start_on_device(
-        cache_device, cache_mode=CacheMode.WO, cache_line_size=cacheline_size
+        cache_device, cache_mode=CacheMode.WO, cache_line_size=cacheline_size, eviction_policy=eviction_policy
     )
 
     core = Core.using_device(core_device)

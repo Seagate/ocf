@@ -2,6 +2,7 @@
 
 #
 # Copyright(c) 2012-2021 Intel Corporation
+# Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
@@ -16,7 +17,7 @@ MAIN_DIRECTORY_OF_UNIT_TESTS = "../tests/"
 # Paths to all directories, in which tests are stored. All paths should be relative to
 # MAIN_DIRECTORY_OF_UNIT_TESTS
 DIRECTORIES_WITH_TESTS_LIST = ["cleaning/", "metadata/", "mngt/", "concurrency/", "engine/",
-                               "ocf_space.c/", "ocf_lru.c/", "utils/", "promotion/"]
+                               "ocf_space.c/", "eviction/", "utils/", "promotion/"]
 
 # Paths to all directories containing files with sources. All paths should be relative to
 # MAIN_DIRECTORY_OF_TESTED_PROJECT
