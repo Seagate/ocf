@@ -1,5 +1,6 @@
 /*
  * Copyright(c) 2012-2021 Intel Corporation
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -33,8 +34,6 @@ enum ocf_metadata_segment_id {
 	metadata_segment_cleaning =	/*!< Cleaning policy */
 			metadata_segment_variable_size_start,
 	metadata_segment_eviction,	/*!< Eviction policy */
-	// metadata_segment_lru,		/*!< Eviction policy */
-	// metadata_segment_lfu,		/*!< Eviction policy */
 	metadata_segment_collision,	/*!< Collision */
 	metadata_segment_list_info,	/*!< Collision */
 	metadata_segment_hash,		/*!< Hash */

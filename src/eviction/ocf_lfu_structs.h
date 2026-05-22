@@ -1,3 +1,8 @@
+/*
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef __EVICTION_LFU_STRUCTS_H__
 
 #define __EVICTION_LFU_STRUCTS_H__

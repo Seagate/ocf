@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2026 Seagate Technology
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 

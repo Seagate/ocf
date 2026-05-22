@@ -2,6 +2,7 @@
  * Copyright(c) 2019-2021 Intel Corporation
  * Copyright(c) 2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 

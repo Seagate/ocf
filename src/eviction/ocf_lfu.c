@@ -1,4 +1,7 @@
-// ocf_lfu.c - Minimal LFU implementation
+/*
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 
 #include "ocf_lfu.h"
 #include "../utils/utils_cleaner.h"

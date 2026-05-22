@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2022-2023 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -17,7 +18,7 @@
 #define OCF_LRU_GET_LIST_INDEX(cline) \
 	(((cline) / OCF_LRU_CHUNK_SIZE) % OCF_NUM_LRU_LISTS)
 
-#define LFU_MAX_FREQ 16  // Maximum frequency bucket count (tune as needed)
+#define LFU_MAX_FREQ 16  // Maximum frequency bucket count
 #define LFU_NUM_SHARDS 32
 #define LFU_CHUNK_SIZE 256
 

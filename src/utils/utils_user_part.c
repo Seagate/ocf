@@ -1,6 +1,7 @@
 /*
  * Copyright(c) 2012-2021 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -139,10 +140,6 @@ void ocf_user_part_move(struct ocf_request *req)
 			ocf_cleaning_purge_cache_block(cache, line);
 		}
 
-		// ocf_lru_repart(cache, line, &cache->user_parts[id_old].part,
-		// 		&cache->user_parts[id_new].part);
-		// ocf_lfu_repart(cache, line, &cache->user_parts[id_old].part,
-		// 		&cache->user_parts[id_new].part);
 		ocf_eviction_repart(cache, line, &cache->user_parts[id_old].part,
 				&cache->user_parts[id_new].part);
 

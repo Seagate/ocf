@@ -1,3 +1,8 @@
+/*
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+
 #ifndef EVICTION_H_
 #define EVICTION_H_
 

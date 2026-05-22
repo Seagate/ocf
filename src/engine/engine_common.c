@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2024 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -206,9 +207,7 @@ void ocf_engine_set_hot(struct ocf_request *req)
 		status = entry->status;
 
 		if (status == LOOKUP_HIT || status == LOOKUP_HIT_INVALID) {
-			/* Update eviction (LRU) */
-			// ocf_lru_hot_cline(cache, entry->coll_idx);
-			// ocf_lfu_increment(cache, entry->coll_idx);
+			/* Update eviction */
 			ocf_eviction_hot_cline(cache, entry->coll_idx);
 		}
 	}

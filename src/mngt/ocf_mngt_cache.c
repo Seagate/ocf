@@ -2,6 +2,7 @@
  * Copyright(c) 2012-2022 Intel Corporation
  * Copyright(c) 2023-2025 Huawei Technologies
  * Copyright(c) 2026 Unvertical
+ * Copyright(c) 2026 Seagate Technology LLC and/or its affiliates
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -28,8 +29,6 @@
 #include "../utils/utils_cleaner.h"
 #include "../concurrency/ocf_concurrency.h"
 #include "../concurrency/ocf_metadata_concurrency.h"
-// #include "../ocf_lru.h"
-// #include "../ocf_lfu.h"
 #include "../eviction/ocf_eviction_ops.h"
 #include "../ocf_ctx_priv.h"
 #include "../cleaning/cleaning.h"
@@ -263,23 +262,6 @@ err:
     return ret;
 }
 
-// static void _init_parts_attached(ocf_pipeline_t pipeline, void *priv,
-// 								 ocf_pipeline_arg_t arg)
-// {
-// 	struct ocf_init_metadata_context *context = priv;
-// 	ocf_cache_t cache = context->cache;
-// 	int ret;
-
-// 	ret = __init_eviction_policy(cache);
-
-// 	if (ret)
-// 		OCF_PL_FINISH_RET(pipeline, ret);
-
-// 	ocf_cache_log(cache, log_info, "[_init_parts_attached] Initialized successfully!\n");
-
-// 	ocf_pipeline_next(pipeline);
-// }
-
 static void __deinit_eviction_policy(ocf_cache_t cache) {
 	ocf_part_id_t part_id;
 
@@ -290,9 +272,6 @@ static void __deinit_eviction_policy(ocf_cache_t cache) {
 	/* free freelist runtime */
 	ocf_eviction_deinit_part(cache, &cache->free);
 	ocf_eviction_deinit_part(cache, &cache->free_detached);
-
-	// /* free cache-wide policy object, if you have one */
-	// ocf_eviction_deinit(cache);
 
 	cache->eviction_policy = ocf_eviction_none;
 }

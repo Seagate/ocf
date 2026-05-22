@@ -284,8 +284,6 @@ static void ocf_mngt_cache_try_add_core_prepare(ocf_pipeline_t pipeline,
 		OCF_PL_FINISH_RET(context->pipeline, -OCF_ERR_CORE_UUID_EXISTS);
 	}
 
-	ocf_cache_log(cache, log_debug, "ocf_mngt_cache_try_add_core_prepare\n");
-
 	volume = ocf_core_get_volume(core);
 	type = ocf_volume_get_type(volume);
 
